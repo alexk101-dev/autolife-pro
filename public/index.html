@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AutoLife Pro</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Светлая тема (Telegram-style) */
+        :root {
+            --bg-color: #f6f6f6;
+            --card-color: #ffffff;
+            --card-elevated: #ffffff;
+            --text-primary: #000000;
+            --text-secondary: #8e8e93;
+            --accent: #2481cc;
+            --accent-light: rgba(36, 129, 204, 0.12);
+            --success: #34c759;
+            --warning: #ff9500;
+            --danger: #ff3b30;
+            --gray-light: #f0f0f0;
+            --gray: #8e8e93;
+            --border-color: rgba(0, 0, 0, 0.08);
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --shadow-inset: inset 0 2px 6px rgba(0,0,0,0.06);
+            --blur-strong: blur(20px);
+            --blur-soft: blur(12px);
+            --input-bg: #ffffff;
+            --input-text: #000000;
+            --input-border: rgba(0,0,0,0.12);
+            --input-focus: rgba(36, 129, 204, 0.2);
+        }
+        /* Тёмная тема (Telegram-style) */
+        :root[data-theme="dark"] {
+            --bg-color: linear-gradient(180deg, #0f1621 0%, #050a10 100%);
+            --card-color: #1c2533;
+            --card-elevated: #202b36;
+            --text-primary: #e8edf5;
+            --text-secondary: #a0a8b8;
+            --accent: #3390ec;
+            --accent-light: rgba(51, 144, 236, 0.22);
+            --success: #3dd68c;
+            --warning: #ffcf5c;
+            --danger: #ff6b81;
+            --gray-light: rgba(255, 255, 255, 0.06);
+            --gray: #7f8a9c;
+            --border-color: rgba(255, 255, 255, 0.09);
+            --shadow-soft: 0 16px 32px rgba(0, 0, 0, 0.65);
+            --shadow-inset: inset 0 2px 8px rgba(0,0,0,0.7);
+            --blur-strong: blur(24px);
+            --blur-soft: blur(16px);
+            --input-bg: #1a1f2e;
+            --input-text: #e8edf5;
+            --input-border: rgba(255,255,255,0.08);
+            --input-focus: rgba(51, 144, 236, 0.4);
+        }
+        body {
+            background: var(--bg-color);
+            color: var(--text-primary);
+            padding: 16px;
+            padding-bottom: 90px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        /* Карточки */
+        .card {
+            background: var(--card-color);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border-color);
+            backdrop-filter: var(--blur-soft);
+            -webkit-backdrop-filter: var(--blur-soft);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-weight: 600;
+            font-size: 17px;
+            color: var(--text-primary);
+        }
+        /* Автомобили */
+        .car-scroll {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 8px 0 16px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+        .car-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .car-chip {
+            background: var(--card-elevated);
+            border-radius: 30px;
+            padding: 12px 18px;
+            white-space: normal;
+            font-weight: 500;
+            font-size: 15px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            min-width: 190px;
+            line-height: 1.15;
+        }
+        .car-chip-title {
+            font-weight: 650;
+            font-size: 15px;
+            color: inherit;
+        }
+        .car-chip-sub {
+            font-size: 12px;
+            opacity: 0.78;
+            color: inherit;
+        }
+        .car-chip.active {
+            background: var(--accent-light);
+            color: var(--text-primary);
+            border-color: var(--accent);
+        }
+        .add-car-chip {
+            background: transparent;
+            border: 1px dashed var(--accent);
+            color: var(--accent);
+            align-items: center;
+            text-align: center;
+            min-width: 90px;
+        }
+        /* Статистика */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .stat-card {
+            background: var(--card-elevated);
+            border-radius: 18px;
+            padding: 14px;
+            text-align: center;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border-color);
+            backdrop-filter: var(--blur-soft);
+            -webkit-backdrop-filter: var(--blur-soft);
+        }
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--accent);
+            line-height: 1.2;
+        }
+        .stat-unit {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 400;
+            margin-left: 2px;
+        }
+        /* Прогресс масла */
+        .oil-card {
+            background: linear-gradient(135deg, var(--card-elevated), var(--card-color));
+            color: var(--text-primary);
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border-color);
+            backdrop-filter: var(--blur-strong);
+            -webkit-backdrop-filter: var(--blur-strong);
+        }
+        .oil-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .oil-title {
+            font-weight: 500;
+            opacity: 0.9;
+            font-size: 15px;
+        }
+        .oil-value {
+            font-size: 26px;
+            font-weight: 700;
+        }
+        .progress-bar {
+            background: rgba(255,255,255,0.1);
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+        .progress-fill {
+            background: var(--accent);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .progress-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+        }
+        /* История */
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--gray-light);
+        }
+        .history-item:last-child {
+            border-bottom: none;
+        }
+        .history-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            background: var(--accent-light);
+            flex-shrink: 0;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border-color);
+        }
+        .history-content {
+            flex: 1;
+        }
+        .history-title {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+        .history-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 12px;
+        }
+        .history-comment {
+            font-size: 12px;
+            color: var(--accent);
+            margin-top: 4px;
+        }
+        .history-amount {
+            font-weight: 600;
+            font-size: 17px;
+        }
+        .history-amount.fuel {
+            color: var(--warning);
+        }
+        .history-amount.expense {
+            color: var(--danger);
+        }
+        .history-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+        }
+        .history-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .icon-btn {
+            border: none;
+            background: var(--gray-light);
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: none;
+        }
+        .icon-btn:active {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+        .nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-color);
+            backdrop-filter: var(--blur-strong);
+            -webkit-backdrop-filter: var(--blur-strong);
+            height: 84px;
+            display: flex;
+            border-top: 1px solid var(--border-color);
+            z-index: 1000;
+            padding-bottom: 8px;
+            box-shadow: var(--shadow-soft);
+        }
+        .nav-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.2px;
+            cursor: pointer;
+            transition: all 0.1s;
+            padding: 0;
+        }
+        .nav-btn.active {
+            color: var(--accent);
+        }
+        .nav-icon {
+            font-size: 22px;
+            font-weight: 400;
+            margin-bottom: 2px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            margin-left: 4px;
+        }
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 16px;
+            font-size: 16px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--input-text);
+            transition: all 0.2s ease;
+            box-shadow: var(--shadow-inset);
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--input-focus), var(--shadow-inset);
+        }
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+            color: white;
+            background: linear-gradient(135deg, #5b96ff 0%, #2f6bff 50%, #1e4fd9 100%);
+        }
+        .btn:active {
+            transform: scale(0.97) translateY(1px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #3dd68c 0%, #1b9d5b 40%, #133826 100%);
+            box-shadow: 0 18px 40px rgba(2, 173, 95, 0.4);
+        }
+        .theme-toggle {
+            position: fixed;
+            top: 12px;
+            right: 16px;
+            z-index: 1100;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: var(--card-color);
+            color: var(--text-secondary);
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            box-shadow: var(--shadow-soft);
+        }
+        .theme-toggle span.material-symbols-outlined {
+            font-size: 17px;
+        }
+        .btn-add-car {
+            background: linear-gradient(135deg, #34c759 0%, #28a745 50%, #1e7e34 100%);
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+        }
+        .btn-add-car:active {
+            transform: scale(0.96);
+            box-shadow: 0 2px 8px rgba(52, 199, 89, 0.2);
+        }
+        .tab {
+            display: none;
+        }
+        .tab.active {
+            display: block;
+            animation: fadeIn 0.2s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0.5; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.3;
+        }
+        .loading-spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--gray-light);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none !important;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 16px;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: var(--card-color);
+            border-radius: 28px;
+            padding: 24px;
+            max-width: 400px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .quick-btn {
+            background: var(--accent-light);
+            border: none;
+            border-radius: 16px;
+            padding: 14px 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--accent);
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+        .quick-btn:active {
+            background: var(--accent);
+            color: white;
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #111827;
+            color: #f9fafb;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 500;
+            font-size: 14px;
+            z-index: 3000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+            animation: slideDown 0.2s;
+        }
+        :root[data-theme="dark"] .toast {
+            background: rgba(15, 23, 42, 0.96);
+            color: #f9fafb;
+        }
+        @keyframes slideDown {
+            from { transform: translate(-50%, -100%); opacity: 0; }
+            to { transform: translate(-50%, 0%); opacity: 1; }
+        }
+        .cars-modal-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .cars-modal-item {
+            padding: 10px 12px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+        .cars-modal-item.active {
+            border-color: var(--accent);
+            background: var(--accent-light);
+        }
+        .cars-modal-main {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .cars-modal-title {
+            font-weight: 600;
+        }
+        .cars-modal-sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        #globalLoader {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(4px);
+        }
+        #globalLoader.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Глобальный индикатор загрузки -->
+<div id="globalLoader" class="hidden">
+    <div class="loading-spinner"></div>
+</div>
+
+<button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">
+    <span class="material-symbols-outlined" id="themeToggleIcon">dark_mode</span>
+    <span id="themeToggleLabel">Тёмная</span>
+</button>
+
+<div class="container">
+    <!-- Автомобили -->
+    <div class="card" id="carsCard">
+        <div class="card-header">
+            <span class="card-title">Мои автомобили</span>
+            <button class="icon-btn" onclick="openCarsModal()">
+                <span class="material-symbols-outlined" style="font-size:18px; margin-right:4px;">directions_car</span>
+                Все
+            </button>
+        </div>
+        <div id="carList" class="car-scroll"></div>
+        <button class="btn btn-add-car" style="margin-top:8px;" onclick="showAddCarModal()">+ Добавить авто</button>
+    </div>
+
+    <!-- Главная -->
+    <div id="homeTab" class="tab active">
+        <!-- Статистика -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Расход</div>
+                <div class="stat-value" id="consumption">--<span class="stat-unit">л/100км</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Пробег</div>
+                <div class="stat-value" id="mileage">--<span class="stat-unit">км</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Заправок</div>
+                <div class="stat-value" id="fuelCount">--</div>
+            </div>
+        </div>
+        <!-- Масло -->
+        <div class="oil-card">
+            <div class="oil-header">
+                <span class="oil-title">Замена масла</span>
+                <span class="oil-value" id="oilRemaining">-- км</span>
+            </div>
+            <div class="progress-bar">
+                <div id="oilProgress" class="progress-fill"></div>
+            </div>
+            <div class="progress-labels">
+                <span>0 км</span>
+                <span id="oilInterval">10 000 км</span>
+            </div>
+        </div>
+        <!-- Последние записи -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Последние записи</span>
+                <span style="color: var(--accent); font-size: 14px; cursor: pointer;" onclick="switchTab('add')">+ Добавить</span>
+            </div>
+            <div id="historyList"></div>
+            <div id="historyEmpty" class="empty-state hidden">
+                <div class="empty-icon">📝</div>
+                <div>Нет записей</div>
+                <div style="font-size: 13px; margin-top: 8px;">Нажмите "Добавить"</div>
+            </div>
+        </div>
+    </div>
+    <!-- Статистика -->
+    <div id="statsTab" class="tab">
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Расходы по категориям</span>
+                <select id="statsPeriod" onchange="loadStats()" style="border: none; background: none; font-size: 14px;">
+                    <option value="month">Месяц</option>
+                    <option value="year">Год</option>
+                    <option value="all">Всё время</option>
+                </select>
+            </div>
+            <canvas id="chartCat" height="200"></canvas>
+            <div id="statsEmpty" class="empty-state hidden">
+                <div class="empty-icon">📊</div>
+                <div>Нет данных</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Цена топлива</span>
+            </div>
+            <canvas id="chartPrice" height="150"></canvas>
+            <div id="fuelEmpty" class="empty-state hidden">
+                <div class="empty-icon">⛽</div>
+                <div>Нет записей</div>
+            </div>
+        </div>
+    </div>
+    <!-- Добавление -->
+    <div id="addTab" class="tab">
+        <div class="card">
+            <div class="form-group">
+                <label class="form-label">Тип</label>
+                <select id="recordType" class="form-select" onchange="toggleRecordFields()">
+                    <option value="expense">Расход / Ремонт</option>
+                    <option value="fuel">Заправка</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Сумма (₽)</label>
+                <input type="number" id="amount" class="form-input" placeholder="0" step="0.01">
+            </div>
+            <div id="fuelFields" class="hidden">
+                <div class="form-group">
+                    <label class="form-label">Литры</label>
+                    <input type="number" id="liters" class="form-input" placeholder="0" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Пробег (км)</label>
+                    <input type="number" id="fuelMileage" class="form-input" placeholder="15000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">АЗС</label>
+                    <input type="text" id="station" class="form-input" placeholder="Лукойл">
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="fullTank"> Полный бак
+                    </label>
+                </div>
+            </div>
+            <div id="expenseFields">
+                <div class="form-group">
+                    <label class="form-label">Категория</label>
+                    <select id="category" class="form-select" onchange="updateServiceFieldsVisibility()">
+                        <option value="🛠 Ремонт">🛠 Ремонт</option>
+                        <option value="🧼 Мойка">🧼 Мойка</option>
+                        <option value="📄 Страховка">📄 Страховка</option>
+                        <option value="⚙️ ТО">⚙️ ТО</option>
+                        <option value="🚗 Запчасти">🚗 Запчасти</option>
+                        <option value="📦 Прочее">📦 Прочее</option>
+                    </select>
+                </div>
+                <div id="serviceFields" class="form-group hidden">
+                    <label class="form-label">Пробег при ТО (км)</label>
+                    <input type="number" id="serviceMileage" class="form-input" placeholder="Например, 25 000">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Комментарий</label>
+                <textarea id="comment" class="form-textarea" placeholder="Дополнительно" rows="3"></textarea>
+            </div>
+            <button class="btn" onclick="saveRecord()">Сохранить</button>
+        </div>
+        <!-- Быстрые действия -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Быстрые действия</span>
+            </div>
+            <div class="quick-actions">
+                <button class="quick-btn" onclick="quickAction('oil')">🛢️ Масло</button>
+                <button class="quick-btn" onclick="quickAction('wash')">🧼 Мойка</button>
+                <button class="quick-btn" onclick="quickAction('fuel')">⛽ Заправка</button>
+                <button class="quick-btn" onclick="quickAction('insurance')">📄 Страховка</button>
+                <button class="quick-btn" onclick="quickAction('service')">⚙️ ТО</button>
+                <button class="quick-btn" onclick="quickAction('other')">📦 Другое</button>
+            </div>
+        </div>
+    </div>
+    <!-- Настройки -->
+    <div id="settingsTab" class="tab">
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Настройки авто</span>
+            </div>
+           
+            <div class="form-group">
+                <label class="form-label">Название</label>
+                <input type="text" id="settingsName" class="form-input">
+            </div>
+           
+            <div class="form-group">
+                <label class="form-label">Госномер</label>
+                <input type="text" id="settingsReg" class="form-input">
+            </div>
+           
+            <div class="form-group">
+                <label class="form-label">Пробег</label>
+                <input type="number" id="settingsMileage" class="form-input">
+            </div>
+           
+            <div class="form-group">
+                <label class="form-label">Интервал масла (км)</label>
+                <input type="number" id="settingsOilInterval" class="form-input" value="10000">
+            </div>
+           
+            <button class="btn" onclick="updateCarSettings()">Сохранить</button>
+        </div>
+    </div>
+</div>
+<!-- Навигация - iOS стиль -->
+<nav class="nav-bar">
+    <button class="nav-btn active" onclick="switchTab('home', this)">
+        <span class="nav-icon material-symbols-outlined">home</span>
+        <span>Главная</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('stats', this)">
+        <span class="nav-icon material-symbols-outlined">query_stats</span>
+        <span>Статистика</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('add', this)">
+        <span class="nav-icon material-symbols-outlined">add_circle</span>
+        <span>Добавить</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('settings', this)">
+        <span class="nav-icon material-symbols-outlined">settings</span>
+        <span>Настройки</span>
+    </button>
+</nav>
+<!-- Модальное окно для добавления автомобиля -->
+<div id="addCarModal" class="modal hidden" onclick="if(event.target===this) hideModal('addCarModal')">
+    <div class="modal-content">
+        <div class="modal-title">Новый автомобиль</div>
+        <div class="form-group">
+            <label class="form-label">Название</label>
+            <input type="text" id="newCarName" class="form-input" placeholder="Audi A6">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Госномер</label>
+            <input type="text" id="newCarReg" class="form-input" placeholder="A777AA">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Пробег</label>
+            <input type="number" id="newCarMileage" class="form-input" placeholder="0">
+        </div>
+        <div class="modal-buttons">
+            <button class="btn" style="background: var(--gray-light); color: var(--text-primary);" onclick="hideModal('addCarModal')">Отмена</button>
+            <button class="btn" onclick="addNewCar()">Добавить</button>
+        </div>
+    </div>
+</div>
+<!-- Модальное окно списка автомобилей -->
+<div id="carsModal" class="modal hidden" onclick="if(event.target===this) hideModal('carsModal')">
+    <div class="modal-content">
+        <div class="modal-title">Мои автомобили</div>
+        <div id="carsModalList" class="cars-modal-list"></div>
+        <div class="modal-buttons">
+            <button class="btn" style="background: var(--gray-light); color: var(--text-primary);" onclick="hideModal('carsModal')">Закрыть</button>
+            <button class="btn" onclick="showAddCarModal()">Добавить авто</button>
+        </div>
+    </div>
+</div>
+<script>
+    // ================ НАСТРОЙКИ ================
+    let USER_ID = localStorage.getItem('autolife_user_id');
+    if (!USER_ID) {
+        USER_ID = 'user_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+        localStorage.setItem('autolife_user_id', USER_ID);
+    }
+
+    const API_URL = 'http://localhost:3000';
+    const THEME_STORAGE_KEY = 'autolife_theme';
+    let currentCarId = null;
+    let currentCarData = null;
+    let allCars = [];
+    let charts = { category: null, price: null };
+    let editingRecord = null; // { id, type }
+    function escapeHtml(str) {
+        return String(str ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+    // ================ ТЕМА ================
+    function detectInitialTheme() {
+        // Попытка взять тему из Telegram WebApp, если открыто внутри Telegram
+        try {
+            if (window.Telegram && window.Telegram.WebApp) {
+                const scheme = window.Telegram.WebApp.colorScheme; // 'light' | 'dark'
+                if (scheme === 'dark' || scheme === 'light') return scheme;
+            }
+        } catch (e) {
+            console.warn('Telegram WebApp недоступен:', e);
+        }
+        // Локальное сохранённое значение
+        const saved = localStorage.getItem(THEME_STORAGE_KEY);
+        if (saved === 'light' || saved === 'dark') return saved;
+        // Системные настройки
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            return 'dark';
+        }
+        return 'light';
+    }
+    function applyTheme(theme) {
+        const root = document.documentElement;
+        if (theme === 'dark') {
+            root.setAttribute('data-theme', 'dark');
+        } else {
+            root.removeAttribute('data-theme');
+        }
+        const iconEl = document.getElementById('themeToggleIcon');
+        const labelEl = document.getElementById('themeToggleLabel');
+        if (iconEl && labelEl) {
+            if (theme === 'dark') {
+                iconEl.textContent = 'light_mode';
+                labelEl.textContent = 'Светлая';
+            } else {
+                iconEl.textContent = 'dark_mode';
+                labelEl.textContent = 'Тёмная';
+            }
+        }
+    }
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        const next = current === 'dark' ? 'light' : 'dark';
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+        applyTheme(next);
+    }
+    // ================ ИНИЦИАЛИЗАЦИЯ ================
+    window.onload = async () => {
+        const initialTheme = detectInitialTheme();
+        applyTheme(initialTheme);
+        await loadCars();
+        toggleRecordFields();
+        updateServiceFieldsVisibility();
+    };
+    // ================ УВЕДОМЛЕНИЯ ================
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+    }
+    // ================ МОДАЛЬНЫЕ ОКНА ================
+    function showModal(modalId) {
+        document.getElementById(modalId).classList.remove('hidden');
+    }
+    function hideModal(modalId) {
+        document.getElementById(modalId).classList.add('hidden');
+    }
+    // ================ АВТОМОБИЛИ ================
+    async function loadCars() {
+        try {
+            const response = await fetch(`${API_URL}/cars/${USER_ID}`);
+            const cars = await response.json();
+            allCars = cars;
+           
+            updateCarList(cars);
+           
+            if (cars.length > 0) {
+                await selectCar(cars[0].id);
+            } else {
+                showAddCarModal();
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки:', error);
+            loadDemoData();
+        }
+    }
+    function updateCarList(cars) {
+        const carList = document.getElementById('carList');
+       
+        if (cars.length === 0) {
+            carList.innerHTML = `
+                <div class="empty-state" style="padding: 12px 0;">
+                    <div class="empty-icon" style="font-size:32px; margin-bottom:8px;">🚗</div>
+                    <div>Добавьте ваш первый автомобиль</div>
+                </div>
+            `;
+            return;
+        }
+        carList.innerHTML = cars.map(car => `
+            <div class="car-chip ${car.id === currentCarId ? 'active' : ''}"
+                 onclick="selectCar(${car.id})">
+                <div class="car-chip-title">${escapeHtml(car.car_name)}</div>
+                <div class="car-chip-sub">
+                    ${escapeHtml(car.reg_number || '—')} · ${(Number(car.mileage) || 0).toLocaleString('ru-RU')} км
+                </div>
+            </div>
+        `).join('');
+    }
+    function showAddCarModal() {
+        document.getElementById('newCarName').value = '';
+        document.getElementById('newCarReg').value = '';
+        document.getElementById('newCarMileage').value = '';
+        showModal('addCarModal');
+    }
+    function openCarsModal() {
+        const listEl = document.getElementById('carsModalList');
+        if (!listEl) return;
+        if (!allCars || allCars.length === 0) {
+            listEl.innerHTML = `
+                <div class="empty-state" style="padding: 16px 0;">
+                    <div class="empty-icon">🚗</div>
+                    <div>Пока нет ни одного авто</div>
+                </div>
+            `;
+        } else {
+            listEl.innerHTML = allCars.map(car => `
+                <div class="cars-modal-item ${car.id === currentCarId ? 'active' : ''}">
+                    <div class="cars-modal-main" onclick="handleSelectCarFromModal(${car.id})">
+                        <div class="cars-modal-title">${escapeHtml(car.car_name)}</div>
+                        <div class="cars-modal-sub">
+                            ${escapeHtml(car.reg_number || '—')} · ${(Number(car.mileage) || 0).toLocaleString('ru-RU')} км
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:4px;">
+                        <button class="icon-btn" onclick="handleSelectCarFromModal(${car.id}); event.stopPropagation();">
+                            <span class="material-symbols-outlined" style="font-size:18px;">directions_car</span>
+                        </button>
+                        <button class="icon-btn" style="background:rgba(239,68,68,0.08); color:#b91c1c;" onclick="deleteCar(${car.id}); event.stopPropagation();">
+                            <span class="material-symbols-outlined" style="font-size:18px;">delete</span>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        showModal('carsModal');
+    }
+    function handleSelectCarFromModal(id) {
+        selectCar(id);
+        hideModal('carsModal');
+    }
+    async function deleteCar(id) {
+        if (!confirm('Удалить автомобиль и все его записи?')) return;
+        try {
+            const res = await fetch(`${API_URL}/cars/${id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                let msg = 'Не удалось удалить авто';
+                try {
+                    const data = await res.json();
+                    if (data && data.error) {
+                        msg = data.error;
+                    }
+                } catch (_) {}
+                showToast(msg);
+                return;
+            }
+            // Обновляем список авто
+            await loadCars();
+            hideModal('carsModal');
+            // Если удалили текущий авто - выберем первый из списка
+            if (!allCars.some(c => c.id === currentCarId) && allCars.length > 0) {
+                await selectCar(allCars[0].id);
+            } else if (allCars.length === 0) {
+                currentCarId = null;
+                currentCarData = null;
+            }
+            showToast('Авто удалён');
+        } catch (e) {
+            console.error('Ошибка удаления авто:', e);
+            showToast('Ошибка удаления авто');
+        }
+    }
+    async function addNewCar() {
+        const name = document.getElementById('newCarName').value.trim();
+        const reg = document.getElementById('newCarReg').value.trim();
+        const mileage = parseInt(document.getElementById('newCarMileage').value) || 0;
+        if (!name) {
+            showToast('Введите название');
+            return;
+        }
+        try {
+            const response = await fetch(`${API_URL}/add-car`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: USER_ID,
+                    car_name: name,
+                    reg_number: reg,
+                    mileage: mileage
+                })
+            });
+            if (response.ok) {
+                hideModal('addCarModal');
+                showToast('Авто добавлен');
+                await loadCars();
+                hideModal('carsModal');
+            }
+        } catch (error) {
+            showToast('Ошибка');
+        }
+    }
+    async function selectCar(carId) {
+        currentCarId = carId;
+        updateCarList(allCars);
+        await loadDashboard();
+        await loadStats();
+    }
+    // ================ ДЕМО-ДАННЫЕ ================
+    function loadDemoData() {
+        currentCarId = 1;
+        currentCarData = {
+            car: {
+                id: 1,
+                car_name: 'Audi A6',
+                reg_number: 'A777AA',
+                mileage: 28450,
+                oil_change_interval: 10000
+            },
+            consumption: 9.8,
+            history: [
+                {
+                    id: 1,
+                    type: 'fuel',
+                    category: '⛽ Заправка',
+                    amount: 3200,
+                    liters: 42,
+                    price_per_liter: 76.2,
+                    date: new Date(Date.now() - 5*24*60*60*1000).toISOString(),
+                    comments: 'Лукойл',
+                    mileage: 28450
+                },
+                {
+                    id: 2,
+                    type: 'fuel',
+                    category: '⛽ Заправка',
+                    amount: 2800,
+                    liters: 36,
+                    price_per_liter: 77.8,
+                    date: new Date(Date.now() - 15*24*60*60*1000).toISOString(),
+                    comments: 'Газпром',
+                    mileage: 28100
+                },
+                {
+                    id: 3,
+                    type: 'expense',
+                    category: '🛠 Ремонт',
+                    amount: 5500,
+                    date: new Date(Date.now() - 10*24*60*60*1000).toISOString(),
+                    comments: 'Замена колодок'
+                }
+            ]
+        };
+       
+        allCars = [{ id: 1, car_name: 'Audi A6', reg_number: 'A777AA', mileage: 28450 }];
+        updateCarList(allCars);
+        updateDashboardUI();
+    }
+    // ================ РАСЧЕТ РАСХОДА ТОПЛИВА ================
+    function calculateFuelConsumption(history) {
+        if (!history || history.length < 2) return '0.0';
+       
+        // Берем только заправки и сортируем по дате (новые сверху)
+        const fuels = history
+            .filter(h => h.type === 'fuel')
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
+       
+        console.log('Заправки для расчета:', fuels); // Для отладки
+       
+        if (fuels.length < 2) return '0.0';
+       
+        // Берем две последние заправки
+        const lastFuel = fuels[0];
+        const prevFuel = fuels[1];
+       
+        console.log('Последняя заправка:', lastFuel);
+        console.log('Предыдущая заправка:', prevFuel);
+       
+        // Разница в пробеге
+        const distance = lastFuel.mileage - prevFuel.mileage;
+       
+        console.log('Пройденное расстояние:', distance);
+       
+        if (distance <= 0) return '0.0';
+       
+        // Расход = (литры / расстояние) * 100
+        const consumption = (lastFuel.liters / distance) * 100;
+       
+        console.log('Рассчитанный расход:', consumption);
+       
+        return consumption.toFixed(1);
+    }
+    // ================ ДАШБОРД ================
+    async function loadDashboard() {
+        if (!currentCarId) return;
+        try {
+            const response = await fetch(`${API_URL}/dashboard/${currentCarId}`);
+            const data = await response.json();
+            console.log('Данные дашборда:', data); // Для отладки
+            currentCarData = data;
+            updateDashboardUI();
+        } catch (error) {
+            console.error('Ошибка:', error);
+        }
+    }
+    function updateDashboardUI() {
+        if (!currentCarData) return;
+       
+        const data = currentCarData;
+       
+        // Рассчитываем расход топлива
+        const consumption = calculateFuelConsumption(data.history);
+        document.getElementById('consumption').innerHTML = `${consumption}<span class="stat-unit">л/100км</span>`;
+       
+        // Пробег
+        document.getElementById('mileage').innerHTML = `${(data.car?.mileage || 0).toLocaleString()}<span class="stat-unit">км</span>`;
+       
+        // Количество заправок
+        const fuelCount = data.history?.filter(h => h.type === 'fuel').length || 0;
+        document.getElementById('fuelCount').innerHTML = fuelCount;
+        // Прогресс масла
+        const mileage = data.car?.mileage || 0;
+        const interval = data.car?.oil_change_interval || 10000;
+        const remaining = interval - (mileage % interval);
+        const percent = ((mileage % interval) / interval) * 100;
+       
+        document.getElementById('oilRemaining').innerText = `${remaining} км`;
+        document.getElementById('oilProgress').style.width = `${Math.min(percent, 100)}%`;
+        document.getElementById('oilInterval').innerText = `${interval.toLocaleString()} км`;
+        updateHistoryUI(data.history);
+        if (data.car) {
+            document.getElementById('settingsName').value = data.car.car_name || '';
+            document.getElementById('settingsReg').value = data.car.reg_number || '';
+            document.getElementById('settingsMileage').value = data.car.mileage || 0;
+            document.getElementById('settingsOilInterval').value = data.car.oil_change_interval || 10000;
+        }
+    }
+    function updateHistoryUI(history) {
+        const historyList = document.getElementById('historyList');
+        const historyEmpty = document.getElementById('historyEmpty');
+       
+        if (!history || history.length === 0) {
+            historyList.innerHTML = '';
+            historyEmpty.classList.remove('hidden');
+            return;
+        }
+        historyEmpty.classList.add('hidden');
+        historyList.innerHTML = history.slice(0, 5).map(item => {
+            const icon = item.type === 'fuel' ? '⛽' :
+                        item.category?.includes('🛠') ? '🛠' :
+                        item.category?.includes('🧼') ? '🧼' :
+                        item.category?.includes('📄') ? '📄' :
+                        item.category?.includes('⚙️') ? '⚙️' : '📦';
+            const commentText = item.comments || item.station_name || '';
+           
+            return `
+            <div class="history-item">
+                <div class="history-icon">${icon}</div>
+                <div class="history-content">
+                    <div class="history-title">${item.category || 'Заправка'}</div>
+                    <div class="history-meta">
+                        ${new Date(item.date).toLocaleDateString('ru-RU')}
+                        ${item.mileage ? ` · ${item.mileage} км` : ''}
+                    </div>
+                    ${commentText ? `<div class="history-comment">${commentText}</div>` : ''}
+                </div>
+                <div class="history-right">
+                    <div class="history-amount ${item.type}">-${item.amount.toLocaleString()} ₽</div>
+                    <div class="history-actions">
+                        <button class="icon-btn" onclick="editHistoryItem('${item.type}', ${item.id}); event.stopPropagation();">
+                            ✏️
+                        </button>
+                        <button class="icon-btn" onclick="deleteHistoryItem('${item.type}', ${item.id}); event.stopPropagation();">
+                            🗑
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `}).join('');
+    }
+    // ================ СОХРАНЕНИЕ ================
+    async function saveRecord() {
+        const type = document.getElementById('recordType').value;
+        const amount = parseFloat(document.getElementById('amount').value);
+        const comment = document.getElementById('comment').value;
+        if (editingRecord && type !== editingRecord.type) {
+            showToast('Нельзя менять тип записи');
+            return;
+        }
+        if (!amount || amount <= 0) {
+            showToast('Введите сумму');
+            return;
+        }
+        const payload = {
+            car_id: currentCarId,
+            amount: amount,
+            comments: comment
+        };
+        try {
+            if (type === 'fuel') {
+                const liters = parseFloat(document.getElementById('liters').value);
+                const mileage = parseInt(document.getElementById('fuelMileage').value);
+               
+                if (!liters || !mileage) {
+                    showToast('Заполните литры и пробег');
+                    return;
+                }
+                // Проверяем что пробег больше предыдущего
+                if (currentCarData?.car?.mileage && mileage <= currentCarData.car.mileage) {
+                    showToast('Пробег должен быть больше текущего');
+                    return;
+                }
+                payload.liters = liters;
+                payload.mileage = mileage;
+                payload.price_per_liter = amount / liters;
+                payload.full_tank = document.getElementById('fullTank').checked;
+                payload.station_name = document.getElementById('station').value;
+                payload.comments = comment;
+                const url = editingRecord && editingRecord.type === 'fuel'
+                    ? `${API_URL}/fuel-records/${editingRecord.id}`
+                    : `${API_URL}/add-fuel`;
+                const method = editingRecord && editingRecord.type === 'fuel' ? 'PUT' : 'POST';
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    showToast(editingRecord ? '⛽ Заправка изменена' : '⛽ Заправка добавлена');
+                   
+                    // Обновляем данные сразу после сохранения
+                    await loadDashboard();
+                   
+                    // Очищаем форму
+                    clearForm();
+                    editingRecord = null;
+                    resetSaveButtonText();
+                   
+                    // Переходим на главную
+                    switchTab('home', document.querySelector('.nav-btn'));
+                }
+            } else {
+                payload.category = document.getElementById('category').value;
+                const serviceMileage = parseInt(document.getElementById('serviceMileage').value);
+                if (payload.category === '⚙️ ТО' && serviceMileage) {
+                    payload.mileage = serviceMileage;
+                }
+               
+                const url = editingRecord && editingRecord.type === 'expense'
+                    ? `${API_URL}/car-expenses/${editingRecord.id}`
+                    : `${API_URL}/add-expense`;
+                const method = editingRecord && editingRecord.type === 'expense' ? 'PUT' : 'POST';
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    showToast(editingRecord ? '📦 Запись изменена' : '📦 Расход добавлен');
+                   
+                    // Обновляем данные сразу после сохранения
+                    await loadDashboard();
+                   
+                    // Очищаем форму
+                    clearForm();
+                    editingRecord = null;
+                    resetSaveButtonText();
+                   
+                    // Переходим на главную
+                    switchTab('home', document.querySelector('.nav-btn'));
+                }
+            }
+        } catch (error) {
+            console.error('Ошибка сохранения:', error);
+            showToast('Ошибка при сохранении');
+        }
+    }
+    function clearForm() {
+        document.getElementById('amount').value = '';
+        document.getElementById('comment').value = '';
+        document.getElementById('liters').value = '';
+        document.getElementById('fuelMileage').value = '';
+        document.getElementById('station').value = '';
+        document.getElementById('fullTank').checked = false;
+        document.getElementById('serviceMileage').value = '';
+        editingRecord = null;
+        resetSaveButtonText();
+    }
+    // ================ НАСТРОЙКИ ================
+    async function updateCarSettings() {
+        const name = document.getElementById('settingsName').value.trim();
+        const reg = document.getElementById('settingsReg').value.trim();
+        const mileage = parseInt(document.getElementById('settingsMileage').value);
+        const oilInterval = parseInt(document.getElementById('settingsOilInterval').value);
+        if (!name) {
+            showToast('Введите название');
+            return;
+        }
+        try {
+            const response = await fetch(`${API_URL}/update-car/${currentCarId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    car_name: name,
+                    reg_number: reg,
+                    mileage: mileage,
+                    oil_change_interval: oilInterval
+                })
+            });
+            if (response.ok) {
+                showToast('Настройки сохранены');
+                await loadDashboard();
+            }
+        } catch (error) {
+            showToast('Ошибка при сохранении');
+        }
+    }
+    // ================ СТАТИСТИКА ================
+    async function loadStats() {
+        if (!currentCarId) return;
+        const period = document.getElementById('statsPeriod').value;
+        try {
+            const response = await fetch(`${API_URL}/stats/${currentCarId}/${period}`);
+            const stats = await response.json();
+            updateCharts(stats);
+        } catch (error) {
+            console.error('Ошибка статистики:', error);
+        }
+    }
+    function updateCharts(stats) {
+        const ctxCat = document.getElementById('chartCat').getContext('2d');
+        const statsEmpty = document.getElementById('statsEmpty');
+        const fuelEmpty = document.getElementById('fuelEmpty');
+       
+        if (stats.expenses?.length > 0) {
+            statsEmpty.classList.add('hidden');
+            if (charts.category) charts.category.destroy();
+           
+            charts.category = new Chart(ctxCat, {
+                type: 'doughnut',
+                data: {
+                    labels: stats.expenses.map(e => e.category),
+                    datasets: [{
+                        data: stats.expenses.map(e => e.total),
+                        backgroundColor: ['#007aff', '#34c759', '#ff9f0a', '#ff3b30', '#5856d6', '#af52de'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    cutout: '70%',
+                    plugins: { legend: { position: 'bottom' } },
+                    responsive: true
+                }
+            });
+        } else {
+            statsEmpty.classList.remove('hidden');
+        }
+        updateFuelPriceChart(fuelEmpty);
+    }
+    function updateFuelPriceChart(fuelEmpty) {
+        if (!currentCarData?.history) return;
+        const fuelEntries = currentCarData.history
+            .filter(h => h.type === 'fuel')
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .slice(-10);
+        if (fuelEntries.length === 0) {
+            fuelEmpty.classList.remove('hidden');
+            return;
+        }
+        fuelEmpty.classList.add('hidden');
+        const ctxPrice = document.getElementById('chartPrice').getContext('2d');
+       
+        if (charts.price) charts.price.destroy();
+       
+        charts.price = new Chart(ctxPrice, {
+            type: 'line',
+            data: {
+                labels: fuelEntries.map(e => new Date(e.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })),
+                datasets: [{
+                    label: 'Цена за литр (₽)',
+                    data: fuelEntries.map(e => e.price_per_liter),
+                    borderColor: '#ff9f0a',
+                    backgroundColor: 'rgba(255,159,10,0.1)',
+                    tension: 0.3,
+                    fill: true,
+                    pointBackgroundColor: '#ff9f0a',
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: { callback: value => value + ' ₽' }
+                    }
+                }
+            }
+        });
+    }
+    // ================ НАВИГАЦИЯ ================
+    function switchTab(tabName, btn) {
+        // Скрываем все табы
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+       
+        // Показываем выбранный таб
+        document.getElementById(tabName + 'Tab').classList.add('active');
+       
+        // Обновляем активную кнопку
+        document.querySelectorAll('.nav-btn').forEach(b => {
+            b.classList.remove('active');
+        });
+        if (btn) btn.classList.add('active');
+        // Загружаем статистику при переходе
+        if (tabName === 'stats') {
+            setTimeout(() => loadStats(), 100);
+        }
+    }
+    // ================ ВСПОМОГАТЕЛЬНЫЕ ================
+    function toggleRecordFields() {
+        const type = document.getElementById('recordType').value;
+        const fuelFields = document.getElementById('fuelFields');
+        const expenseFields = document.getElementById('expenseFields');
+       
+        if (type === 'fuel') {
+            fuelFields.classList.remove('hidden');
+            expenseFields.classList.add('hidden');
+           
+            // Подставляем текущий пробег для удобства
+            if (currentCarData?.car?.mileage) {
+                document.getElementById('fuelMileage').placeholder = `Текущий: ${currentCarData.car.mileage}`;
+            }
+        } else {
+            fuelFields.classList.add('hidden');
+            expenseFields.classList.remove('hidden');
+        }
+        updateServiceFieldsVisibility();
+    }
+    function updateServiceFieldsVisibility() {
+        const categorySelect = document.getElementById('category');
+        if (!categorySelect) return;
+        const category = categorySelect.value;
+        const serviceFields = document.getElementById('serviceFields');
+        const commentEl = document.getElementById('comment');
+        if (category === '⚙️ ТО') {
+            serviceFields.classList.remove('hidden');
+            if (commentEl) {
+                commentEl.placeholder = 'Пункты работ, каждый с новой строки';
+            }
+        } else {
+            serviceFields.classList.add('hidden');
+            if (commentEl) {
+                commentEl.placeholder = 'Дополнительно';
+            }
+        }
+    }
+    function resetSaveButtonText() {
+        const saveBtn = document.querySelector('#addTab .card .btn');
+        if (saveBtn) {
+            saveBtn.textContent = 'Сохранить';
+        }
+    }
+    function setEditSaveButtonText() {
+        const saveBtn = document.querySelector('#addTab .card .btn');
+        if (saveBtn) {
+            saveBtn.textContent = 'Сохранить изменения';
+        }
+    }
+    function findHistoryItem(type, id) {
+        if (!currentCarData || !currentCarData.history) return null;
+        return currentCarData.history.find(item => item.type === type && item.id === id) || null;
+    }
+    function editHistoryItem(type, id) {
+        const item = findHistoryItem(type, id);
+        if (!item) {
+            showToast('Запись не найдена');
+            return;
+        }
+        editingRecord = { id, type };
+        setEditSaveButtonText();
+        const navButtons = document.querySelectorAll('.nav-btn');
+        switchTab('add', navButtons[2]);
+        const typeSelect = document.getElementById('recordType');
+        if (type === 'fuel') {
+            typeSelect.value = 'fuel';
+            toggleRecordFields();
+            document.getElementById('amount').value = item.amount || '';
+            document.getElementById('liters').value = item.liters || '';
+            document.getElementById('fuelMileage').value = item.mileage || '';
+            document.getElementById('station').value = item.station_name || '';
+            document.getElementById('fullTank').checked = !!item.full_tank;
+            document.getElementById('comment').value = item.comments || '';
+        } else {
+            typeSelect.value = 'expense';
+            toggleRecordFields();
+            document.getElementById('amount').value = item.amount || '';
+            const categorySelect = document.getElementById('category');
+            if (categorySelect && item.category) {
+                categorySelect.value = item.category;
+            }
+            updateServiceFieldsVisibility();
+            if (item.category === '⚙️ ТО' && typeof item.mileage === 'number') {
+                document.getElementById('serviceMileage').value = item.mileage || '';
+            } else {
+                document.getElementById('serviceMileage').value = '';
+            }
+            document.getElementById('comment').value = item.comments || '';
+        }
+    }
+    async function deleteHistoryItem(type, id) {
+        if (!confirm('Удалить запись?')) return;
+        try {
+            const endpoint = type === 'fuel'
+                ? `/fuel-records/${id}`
+                : `/car-expenses/${id}`;
+            const response = await fetch(`${API_URL}${endpoint}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                showToast('Запись удалена');
+                await loadDashboard();
+            } else {
+                showToast('Не удалось удалить запись');
+            }
+        } catch (error) {
+            console.error('Ошибка удаления:', error);
+            showToast('Ошибка удаления');
+        }
+    }
+    function quickAction(action) {
+        switchTab('add', document.querySelectorAll('.nav-btn')[2]);
+       
+        const typeSelect = document.getElementById('recordType');
+        const categorySelect = document.getElementById('category');
+       
+        if (action === 'fuel') {
+            typeSelect.value = 'fuel';
+            if (currentCarData?.car?.mileage) {
+                document.getElementById('fuelMileage').value = currentCarData.car.mileage;
+            }
+        } else {
+            typeSelect.value = 'expense';
+           
+            const actions = {
+                'oil': '⚙️ ТО',
+                'wash': '🧼 Мойка',
+                'insurance': '📄 Страховка',
+                'service': '⚙️ ТО',
+                'other': '📦 Прочее'
+            };
+            categorySelect.value = actions[action] || '📦 Прочее';
+        }
+       
+        toggleRecordFields();
+    }
+    // Делаем функции глобальными
+    window.switchTab = switchTab;
+    window.toggleRecordFields = toggleRecordFields;
+    window.saveRecord = saveRecord;
+    window.quickAction = quickAction;
+    window.selectCar = selectCar;
+    window.showAddCarModal = showAddCarModal;
+    window.addNewCar = addNewCar;
+    window.hideModal = hideModal;
+    window.updateCarSettings = updateCarSettings;
+    window.loadStats = loadStats;
+    window.editHistoryItem = editHistoryItem;
+    window.deleteHistoryItem = deleteHistoryItem;
+    window.updateServiceFieldsVisibility = updateServiceFieldsVisibility;
+    window.openCarsModal = openCarsModal;
+    window.handleSelectCarFromModal = handleSelectCarFromModal;
+    window.deleteCar = deleteCar;
+</script>
+</body>
+</html>
