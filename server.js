@@ -10,7 +10,9 @@ app.use(express.static('public'));
 // Подключение к базе (Supabase / Neon / любой PostgreSQL)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: process.env.NODE_ENV === 'production' 
+    ? { rejectUnauthorized: false } 
+    : false,
 });
 
 pool.connect()
@@ -65,6 +67,19 @@ async function initDB() {
         date       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+// Проверяем и добавляем колонку mileage только если её нет
+    const colCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'car_expenses' AND column_name = 'mileage'
+    `);
+
+    if (colCheck.rowCount === 0) {
+      await pool.query('ALTER TABLE car_expenses ADD COLUMN mileage INTEGER');
+      console.log('Колонка mileage добавлена в car_expenses');
+    } else {
+      console.log('Колонка mileage уже существует — пропускаем');
+    }
 
     console.log('✅ База готова');
   } catch (err) {
@@ -77,6 +92,46 @@ initDB().catch(console.error);
 // Health-check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', env: process.env.NODE_ENV || 'development' });
+});
+app.get('/api/expenses', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM expenses ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (e) {
+    console.error('GET /api/expenses:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/expenses', async (req, res) => {
+  try {
+    const { title, amount } = req.body;
+    if (!title || !amount) return res.status(400).json({ error: 'title и amount обязательны' });
+    
+    const result = await pool.query(
+      'INSERT INTO expenses (title, amount) VALUES ($1, $2) RETURNING *',
+      [title, amount]
+    );
+    res.json(result.rows[0]);
+  } catch (e) {
+    console.error('POST /api/expenses:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/expenses/:id', async (req, res) => {
+  try {
+    const { title, amount } = req.body;
+    const result = await pool.query(
+      'UPDATE expenses SET title = $1, amount = $2 WHERE id = $3 RETURNING *',
+      [title, amount, req.params.id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Запись не найдена' });
+    res.json(result.rows[0]);
+  } catch (e) {
+    console.error('PUT /api/expenses:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Список автомобилей пользователя — с подробным логом
