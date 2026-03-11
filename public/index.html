@@ -843,6 +843,22 @@ let USER_ID = localStorage.getItem('autolife_user_id');
     }
     const API_URL = 'https://autolife-pro.onrender.com';
 
+    if (window.Telegram?.WebApp) {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();                // разворачиваем на весь экран
+    window.Telegram.WebApp.setHeaderColor('#000000'); // или любой цвет, можно динамически
+
+    // Используем Telegram ID вместо локального USER_ID
+    const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
+    if (tgUser?.id) {
+        USER_ID = 'tg_' + tgUser.id;
+        localStorage.setItem('autolife_user_id', USER_ID);
+        console.log('Telegram ID установлен:', USER_ID);
+    } else {
+        console.warn('Telegram WebApp user не найден, используем локальный USER_ID');
+    }
+}
+
     function applyUserTheme() {
     const select = document.getElementById('themeSelect');
     const saved = localStorage.getItem('user_theme_choice') || 'system';
