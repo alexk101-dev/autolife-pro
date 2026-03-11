@@ -843,19 +843,51 @@ let USER_ID = localStorage.getItem('autolife_user_id');
     }
     const API_URL = 'https://autolife-pro.onrender.com';
 
+    function applyUserTheme() {
+    const select = document.getElementById('themeSelect');
+    const saved = localStorage.getItem('user_theme_choice') || 'system';
+    const choice = select ? select.value : saved;
+
+    let effective = choice;
+    if (choice === 'system') {
+        effective = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    document.documentElement.setAttribute('data-theme', effective);
+    localStorage.setItem('user_theme_choice', choice);
+
+    // Если системная — реагируем на изменение темы устройства
+    if (choice === 'system') {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyUserTheme);
+    }
+}
+
+
+
     let currentCarId = null;
     let currentCarData = null;
     let allCars = [];
     let charts = { category: null, price: null };
     let editingRecord = null;
-function escapeHtml(str) {
-        return String(str ?? '')
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;')
-            .replaceAll("'", '&#039;');
-    }
+
+
+
+// Безопасное экранирование HTML (чтобы избежать XSS)
+function escapeHtml(unsafe) {
+    if (unsafe == null) return '';
+    return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Применение выбранной темы (системная/светлая/тёмная)
+
+
+
+
     // ================ ТЕМА (без изменений) ================
     function detectInitialTheme() {
         // Попытка взять тему из Telegram WebApp, если открыто внутри Telegram
@@ -904,6 +936,7 @@ function escapeHtml(str) {
 
     // ================ ИНИЦИАЛИЗАЦИЯ ================
     window.onload = async () => {
+        
         applyUserTheme();
         console.log('🚀 Приложение запущено. USER_ID =', USER_ID);
         await loadCars();
