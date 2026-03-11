@@ -844,7 +844,14 @@
     let allCars = [];
     let charts = { category: null, price: null };
     let editingRecord = null;
-
+function escapeHtml(str) {
+        return String(str ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
     // ================ ТЕМА (без изменений) ================
     function detectInitialTheme() {
         // Попытка взять тему из Telegram WebApp, если открыто внутри Telegram
