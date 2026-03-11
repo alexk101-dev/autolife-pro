@@ -1446,6 +1446,13 @@ function escapeHtml(str) {
             }
         });
     }
+
+    async function selectCar(carId) {
+        currentCarId = carId;
+        updateCarList(allCars);
+        await loadDashboard();
+        await loadStats();
+    }
     // ================ НАВИГАЦИЯ ================
     function switchTab(tabName, btn) {
         // Скрываем все табы
@@ -1602,7 +1609,9 @@ function escapeHtml(str) {
         }
        
         toggleRecordFields();
+        
     }
+    
     // Глобальные функции
     window.switchTab = switchTab;
     window.toggleRecordFields = toggleRecordFields;
