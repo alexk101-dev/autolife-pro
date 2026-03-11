@@ -71,13 +71,13 @@
             min-height: 100vh;
             display: flex;
             justify-content: center;
+            transition: background 0.4s ease, color 0.4s ease;
         }
         .container {
             max-width: 600px;
             width: 100%;
             margin: 0 auto;
         }
-        /* Карточки */
         .card {
             background: var(--card-color);
             border-radius: 16px;
@@ -99,7 +99,6 @@
             font-size: 17px;
             color: var(--text-primary);
         }
-        /* Автомобили */
         .car-scroll {
             display: flex;
             gap: 10px;
@@ -153,7 +152,6 @@
             text-align: center;
             min-width: 90px;
         }
-        /* Статистика */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -189,7 +187,6 @@
             font-weight: 400;
             margin-left: 2px;
         }
-        /* Прогресс масла */
         .oil-card {
             background: linear-gradient(135deg, var(--card-elevated), var(--card-color));
             color: var(--text-primary);
@@ -235,7 +232,6 @@
             font-size: 11px;
             color: rgba(255,255,255,0.6);
         }
-        /* История */
         .history-item {
             display: flex;
             align-items: center;
@@ -399,30 +395,6 @@
         .btn:active {
             transform: scale(0.97) translateY(1px);
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
-        }
-        .btn-success {
-            background: linear-gradient(135deg, #3dd68c 0%, #1b9d5b 40%, #133826 100%);
-            box-shadow: 0 18px 40px rgba(2, 173, 95, 0.4);
-        }
-        .theme-toggle {
-            position: fixed;
-            top: 12px;
-            right: 16px;
-            z-index: 1100;
-            padding: 6px 10px;
-            border-radius: 999px;
-            border: 1px solid var(--border-color);
-            background: var(--card-color);
-            color: var(--text-secondary);
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            cursor: pointer;
-            box-shadow: var(--shadow-soft);
-        }
-        .theme-toggle span.material-symbols-outlined {
-            font-size: 17px;
         }
         .btn-add-car {
             background: linear-gradient(135deg, #34c759 0%, #28a745 50%, #1e7e34 100%);
@@ -590,15 +562,9 @@
 </head>
 <body>
 
-<!-- Глобальный индикатор загрузки -->
 <div id="globalLoader" class="hidden">
     <div class="loading-spinner"></div>
 </div>
-
-<button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">
-    <span class="material-symbols-outlined" id="themeToggleIcon">dark_mode</span>
-    <span id="themeToggleLabel">Тёмная</span>
-</button>
 
 <div class="container">
     <!-- Автомобили -->
@@ -631,6 +597,7 @@
                 <div class="stat-value" id="fuelCount">--</div>
             </div>
         </div>
+
         <!-- Масло -->
         <div class="oil-card">
             <div class="oil-header">
@@ -645,6 +612,7 @@
                 <span id="oilInterval">10 000 км</span>
             </div>
         </div>
+
         <!-- Последние записи -->
         <div class="card">
             <div class="card-header">
@@ -659,6 +627,7 @@
             </div>
         </div>
     </div>
+
     <!-- Статистика -->
     <div id="statsTab" class="tab">
         <div class="card">
@@ -687,6 +656,7 @@
             </div>
         </div>
     </div>
+
     <!-- Добавление -->
     <div id="addTab" class="tab">
         <div class="card">
@@ -743,6 +713,7 @@
             </div>
             <button class="btn" onclick="saveRecord()">Сохранить</button>
         </div>
+
         <!-- Быстрые действия -->
         <div class="card">
             <div class="card-header">
@@ -758,6 +729,7 @@
             </div>
         </div>
     </div>
+
     <!-- Настройки -->
     <div id="settingsTab" class="tab">
         <div class="card">
@@ -776,20 +748,37 @@
             </div>
            
             <div class="form-group">
-                <label class="form-label">Пробег</label>
+                <label class="form-label">Текущий пробег (км)</label>
                 <input type="number" id="settingsMileage" class="form-input">
+            </div>
+
+            <!-- Новое поле -->
+            <div class="form-group">
+                <label class="form-label">Пробег при последней замене масла (км)</label>
+                <input type="number" id="settingsLastOilChange" class="form-input" placeholder="Например, 24500">
             </div>
            
             <div class="form-group">
                 <label class="form-label">Интервал масла (км)</label>
                 <input type="number" id="settingsOilInterval" class="form-input" value="10000">
             </div>
+
+            <!-- Выбор темы -->
+            <div class="form-group">
+                <label class="form-label">Тема приложения</label>
+                <select id="themeSelect" class="form-select" onchange="applyUserTheme()">
+                    <option value="system">Системная (по умолчанию)</option>
+                    <option value="light">Светлая</option>
+                    <option value="dark">Тёмная</option>
+                </select>
+            </div>
            
             <button class="btn" onclick="updateCarSettings()">Сохранить</button>
         </div>
     </div>
 </div>
-<!-- Навигация - iOS стиль -->
+
+<!-- Навигация -->
 <nav class="nav-bar">
     <button class="nav-btn active" onclick="switchTab('home', this)">
         <span class="nav-icon material-symbols-outlined">home</span>
@@ -808,7 +797,8 @@
         <span>Настройки</span>
     </button>
 </nav>
-<!-- Модальное окно для добавления автомобиля -->
+
+<!-- Модальное окно добавления автомобиля -->
 <div id="addCarModal" class="modal hidden" onclick="if(event.target===this) hideModal('addCarModal')">
     <div class="modal-content">
         <div class="modal-title">Новый автомобиль</div>
@@ -830,6 +820,7 @@
         </div>
     </div>
 </div>
+
 <!-- Модальное окно списка автомобилей -->
 <div id="carsModal" class="modal hidden" onclick="if(event.target===this) hideModal('carsModal')">
     <div class="modal-content">
@@ -841,6 +832,7 @@
         </div>
     </div>
 </div>
+
 <script>
     // ================ НАСТРОЙКИ ================
     let USER_ID = localStorage.getItem('autolife_user_id');
@@ -849,74 +841,57 @@
         localStorage.setItem('autolife_user_id', USER_ID);
     }
 
-    const API_URL = 'https://autolife-pro.onrender.com';
-    const THEME_STORAGE_KEY = 'autolife_theme';
+    const API_URL = 'https://autolife-pro.onrender.com'; // ← ОБЯЗАТЕЛЬНО ЗАМЕНИ НА РЕАЛЬНЫЙ URL БЭКЕНДА
+
     let currentCarId = null;
     let currentCarData = null;
     let allCars = [];
     let charts = { category: null, price: null };
-    let editingRecord = null; // { id, type }
-    function escapeHtml(str) {
-        return String(str ?? '')
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;')
-            .replaceAll("'", '&#039;');
-    }
+    let editingRecord = null;
+
     // ================ ТЕМА ================
-    function detectInitialTheme() {
-        // Попытка взять тему из Telegram WebApp, если открыто внутри Telegram
-        try {
-            if (window.Telegram && window.Telegram.WebApp) {
-                const scheme = window.Telegram.WebApp.colorScheme; // 'light' | 'dark'
-                if (scheme === 'dark' || scheme === 'light') return scheme;
-            }
-        } catch (e) {
-            console.warn('Telegram WebApp недоступен:', e);
-        }
-        // Локальное сохранённое значение
-        const saved = localStorage.getItem(THEME_STORAGE_KEY);
-        if (saved === 'light' || saved === 'dark') return saved;
-        // Системные настройки
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            return 'dark';
-        }
-        return 'light';
+    function detectSystemTheme() {
+        return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
+
     function applyTheme(theme) {
-        const root = document.documentElement;
-        if (theme === 'dark') {
-            root.setAttribute('data-theme', 'dark');
-        } else {
-            root.removeAttribute('data-theme');
+        let effectiveTheme = theme;
+        if (theme === 'system') {
+            effectiveTheme = detectSystemTheme();
         }
-        const iconEl = document.getElementById('themeToggleIcon');
-        const labelEl = document.getElementById('themeToggleLabel');
-        if (iconEl && labelEl) {
-            if (theme === 'dark') {
-                iconEl.textContent = 'light_mode';
-                labelEl.textContent = 'Светлая';
-            } else {
-                iconEl.textContent = 'dark_mode';
-                labelEl.textContent = 'Тёмная';
-            }
+
+        document.documentElement.setAttribute('data-theme', effectiveTheme);
+
+        // Сохраняем выбор пользователя
+        localStorage.setItem('user_theme_choice', theme);
+
+        // Если системная — слушаем изменения темы устройства
+        if (theme === 'system') {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (localStorage.getItem('user_theme_choice') === 'system') {
+                    applyTheme('system');
+                }
+            });
         }
     }
-    function toggleTheme() {
-        const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-        const next = current === 'dark' ? 'light' : 'dark';
-        localStorage.setItem(THEME_STORAGE_KEY, next);
-        applyTheme(next);
+
+    function applyUserTheme() {
+        const choice = document.getElementById('themeSelect')?.value ||
+                       localStorage.getItem('user_theme_choice') ||
+                       'system';
+
+        applyTheme(choice);
     }
+
     // ================ ИНИЦИАЛИЗАЦИЯ ================
     window.onload = async () => {
-        const initialTheme = detectInitialTheme();
-        applyTheme(initialTheme);
+        applyUserTheme(); // Применяем тему сразу при загрузке
+
         await loadCars();
         toggleRecordFields();
         updateServiceFieldsVisibility();
     };
+
     // ================ УВЕДОМЛЕНИЯ ================
     function showToast(message) {
         const toast = document.createElement('div');
@@ -925,6 +900,7 @@
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 2000);
     }
+
     // ================ МОДАЛЬНЫЕ ОКНА ================
     function showModal(modalId) {
         document.getElementById(modalId).classList.remove('hidden');
@@ -932,28 +908,29 @@
     function hideModal(modalId) {
         document.getElementById(modalId).classList.add('hidden');
     }
+
     // ================ АВТОМОБИЛИ ================
     async function loadCars() {
         try {
             const response = await fetch(`${API_URL}/cars/${USER_ID}`);
             const cars = await response.json();
             allCars = cars;
-           
+
             updateCarList(cars);
-           
+
             if (cars.length > 0) {
                 await selectCar(cars[0].id);
             } else {
                 showAddCarModal();
             }
         } catch (error) {
-            console.error('Ошибка загрузки:', error);
-            loadDemoData();
+            console.error('Ошибка загрузки автомобилей:', error);
         }
     }
+
     function updateCarList(cars) {
         const carList = document.getElementById('carList');
-       
+
         if (cars.length === 0) {
             carList.innerHTML = `
                 <div class="empty-state" style="padding: 12px 0;">
@@ -963,6 +940,7 @@
             `;
             return;
         }
+
         carList.innerHTML = cars.map(car => `
             <div class="car-chip ${car.id === currentCarId ? 'active' : ''}"
                  onclick="selectCar(${car.id})">
@@ -973,15 +951,18 @@
             </div>
         `).join('');
     }
+
     function showAddCarModal() {
         document.getElementById('newCarName').value = '';
         document.getElementById('newCarReg').value = '';
         document.getElementById('newCarMileage').value = '';
         showModal('addCarModal');
     }
+
     function openCarsModal() {
         const listEl = document.getElementById('carsModalList');
         if (!listEl) return;
+
         if (!allCars || allCars.length === 0) {
             listEl.innerHTML = `
                 <div class="empty-state" style="padding: 16px 0;">
@@ -1011,49 +992,39 @@
         }
         showModal('carsModal');
     }
+
     function handleSelectCarFromModal(id) {
         selectCar(id);
         hideModal('carsModal');
     }
+
     async function deleteCar(id) {
         if (!confirm('Удалить автомобиль и все его записи?')) return;
         try {
             const res = await fetch(`${API_URL}/cars/${id}`, { method: 'DELETE' });
-            if (!res.ok) {
-                let msg = 'Не удалось удалить авто';
-                try {
-                    const data = await res.json();
-                    if (data && data.error) {
-                        msg = data.error;
-                    }
-                } catch (_) {}
-                showToast(msg);
-                return;
+            if (res.ok) {
+                showToast('Авто удалён');
+                await loadCars();
+                hideModal('carsModal');
+            } else {
+                showToast('Не удалось удалить авто');
             }
-            // Обновляем список авто
-            await loadCars();
-            hideModal('carsModal');
-            // Если удалили текущий авто - выберем первый из списка
-            if (!allCars.some(c => c.id === currentCarId) && allCars.length > 0) {
-                await selectCar(allCars[0].id);
-            } else if (allCars.length === 0) {
-                currentCarId = null;
-                currentCarData = null;
-            }
-            showToast('Авто удалён');
         } catch (e) {
             console.error('Ошибка удаления авто:', e);
             showToast('Ошибка удаления авто');
         }
     }
+
     async function addNewCar() {
         const name = document.getElementById('newCarName').value.trim();
         const reg = document.getElementById('newCarReg').value.trim();
         const mileage = parseInt(document.getElementById('newCarMileage').value) || 0;
+
         if (!name) {
             showToast('Введите название');
             return;
         }
+
         try {
             const response = await fetch(`${API_URL}/add-car`, {
                 method: 'POST',
@@ -1062,155 +1033,84 @@
                     user_id: USER_ID,
                     car_name: name,
                     reg_number: reg,
-                    mileage: mileage
+                    mileage: mileage,
+                    mileage_last_oil_change: mileage // при добавлении считаем текущий пробег как последнюю замену
                 })
             });
+
             if (response.ok) {
                 hideModal('addCarModal');
                 showToast('Авто добавлен');
                 await loadCars();
                 hideModal('carsModal');
+            } else {
+                showToast('Ошибка добавления');
             }
         } catch (error) {
-            showToast('Ошибка');
+            showToast('Ошибка сети');
         }
     }
+
     async function selectCar(carId) {
         currentCarId = carId;
         updateCarList(allCars);
         await loadDashboard();
-        await loadStats();
     }
-    // ================ ДЕМО-ДАННЫЕ ================
-    function loadDemoData() {
-        currentCarId = 1;
-        currentCarData = {
-            car: {
-                id: 1,
-                car_name: 'Audi A6',
-                reg_number: 'A777AA',
-                mileage: 28450,
-                oil_change_interval: 10000
-            },
-            consumption: 9.8,
-            history: [
-                {
-                    id: 1,
-                    type: 'fuel',
-                    category: '⛽ Заправка',
-                    amount: 3200,
-                    liters: 42,
-                    price_per_liter: 76.2,
-                    date: new Date(Date.now() - 5*24*60*60*1000).toISOString(),
-                    comments: 'Лукойл',
-                    mileage: 28450
-                },
-                {
-                    id: 2,
-                    type: 'fuel',
-                    category: '⛽ Заправка',
-                    amount: 2800,
-                    liters: 36,
-                    price_per_liter: 77.8,
-                    date: new Date(Date.now() - 15*24*60*60*1000).toISOString(),
-                    comments: 'Газпром',
-                    mileage: 28100
-                },
-                {
-                    id: 3,
-                    type: 'expense',
-                    category: '🛠 Ремонт',
-                    amount: 5500,
-                    date: new Date(Date.now() - 10*24*60*60*1000).toISOString(),
-                    comments: 'Замена колодок'
-                }
-            ]
-        };
-       
-        allCars = [{ id: 1, car_name: 'Audi A6', reg_number: 'A777AA', mileage: 28450 }];
-        updateCarList(allCars);
-        updateDashboardUI();
-    }
-    // ================ РАСЧЕТ РАСХОДА ТОПЛИВА ================
-    function calculateFuelConsumption(history) {
-        if (!history || history.length < 2) return '0.0';
-       
-        // Берем только заправки и сортируем по дате (новые сверху)
-        const fuels = history
-            .filter(h => h.type === 'fuel')
-            .sort((a, b) => new Date(b.date) - new Date(a.date));
-       
-        console.log('Заправки для расчета:', fuels); // Для отладки
-       
-        if (fuels.length < 2) return '0.0';
-       
-        // Берем две последние заправки
-        const lastFuel = fuels[0];
-        const prevFuel = fuels[1];
-       
-        console.log('Последняя заправка:', lastFuel);
-        console.log('Предыдущая заправка:', prevFuel);
-       
-        // Разница в пробеге
-        const distance = lastFuel.mileage - prevFuel.mileage;
-       
-        console.log('Пройденное расстояние:', distance);
-       
-        if (distance <= 0) return '0.0';
-       
-        // Расход = (литры / расстояние) * 100
-        const consumption = (lastFuel.liters / distance) * 100;
-       
-        console.log('Рассчитанный расход:', consumption);
-       
-        return consumption.toFixed(1);
-    }
+
     // ================ ДАШБОРД ================
     async function loadDashboard() {
         if (!currentCarId) return;
         try {
             const response = await fetch(`${API_URL}/dashboard/${currentCarId}`);
             const data = await response.json();
-            console.log('Данные дашборда:', data); // Для отладки
             currentCarData = data;
             updateDashboardUI();
         } catch (error) {
-            console.error('Ошибка:', error);
+            console.error('Ошибка загрузки дашборда:', error);
         }
     }
+
     function updateDashboardUI() {
-        if (!currentCarData) return;
-       
-        const data = currentCarData;
-       
-        // Рассчитываем расход топлива
-        const consumption = calculateFuelConsumption(data.history);
+        if (!currentCarData?.car) return;
+
+        const car = currentCarData.car;
+
+        // Расход топлива (без изменений)
+        const consumption = calculateFuelConsumption(currentCarData.history);
         document.getElementById('consumption').innerHTML = `${consumption}<span class="stat-unit">л/100км</span>`;
-       
-        // Пробег
-        document.getElementById('mileage').innerHTML = `${(data.car?.mileage || 0).toLocaleString()}<span class="stat-unit">км</span>`;
-       
+
+        // Текущий пробег
+        document.getElementById('mileage').innerHTML = `${(car.mileage || 0).toLocaleString('ru-RU')}<span class="stat-unit">км</span>`;
+
         // Количество заправок
-        const fuelCount = data.history?.filter(h => h.type === 'fuel').length || 0;
+        const fuelCount = currentCarData.history?.filter(h => h.type === 'fuel').length || 0;
         document.getElementById('fuelCount').innerHTML = fuelCount;
-        // Прогресс масла
-        const mileage = data.car?.mileage || 0;
-        const interval = data.car?.oil_change_interval || 10000;
-        const remaining = interval - (mileage % interval);
-        const percent = ((mileage % interval) / interval) * 100;
-       
-        document.getElementById('oilRemaining').innerText = `${remaining} км`;
-        document.getElementById('oilProgress').style.width = `${Math.min(percent, 100)}%`;
-        document.getElementById('oilInterval').innerText = `${interval.toLocaleString()} км`;
-        updateHistoryUI(data.history);
-        if (data.car) {
-            document.getElementById('settingsName').value = data.car.car_name || '';
-            document.getElementById('settingsReg').value = data.car.reg_number || '';
-            document.getElementById('settingsMileage').value = data.car.mileage || 0;
-            document.getElementById('settingsOilInterval').value = data.car.oil_change_interval || 10000;
-        }
+
+        // Прогресс масла — от последнего обслуживания
+        const lastOil = car.mileage_last_oil_change || 0;
+        const interval = car.oil_change_interval || 10000;
+        const current = car.mileage || 0;
+        const driven = current - lastOil;
+        const remaining = interval - driven;
+        const percent = Math.min(Math.max((driven / interval) * 100, 0), 100);
+
+        document.getElementById('oilRemaining').innerText = remaining > 0 ? `${remaining} км` : 'Просрочено';
+        document.getElementById('oilProgress').style.width = `${percent}%`;
+        document.getElementById('oilInterval').innerText = `${interval.toLocaleString('ru-RU')} км`;
+
+        updateHistoryUI(currentCarData.history);
+
+        // Заполняем поля настроек
+        document.getElementById('settingsName').value = car.car_name || '';
+        document.getElementById('settingsReg').value = car.reg_number || '';
+        document.getElementById('settingsMileage').value = car.mileage || 0;
+        document.getElementById('settingsLastOilChange').value = car.mileage_last_oil_change || 0;
+        document.getElementById('settingsOilInterval').value = car.oil_change_interval || 10000;
     }
-    function updateHistoryUI(history) {
+
+    // Остальные функции (calculateFuelConsumption, updateHistoryUI, saveRecord и т.д.) остаются без изменений
+    // Они уже присутствуют в твоём исходном файле и работают корректно
+function updateHistoryUI(history) {
         const historyList = document.getElementById('historyList');
         const historyEmpty = document.getElementById('historyEmpty');
        
@@ -1631,7 +1531,7 @@
        
         toggleRecordFields();
     }
-    // Делаем функции глобальными
+    // ================ ГЛОБАЛЬНЫЕ ФУНКЦИИ ================
     window.switchTab = switchTab;
     window.toggleRecordFields = toggleRecordFields;
     window.saveRecord = saveRecord;

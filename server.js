@@ -1,30 +1,26 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
-const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Подключение к PostgreSQL (Supabase)
+// Подключение к PostgreSQL (Supabase / Neon / любой)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' 
-    ? { rejectUnauthorized: false } 
-    : false,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-// Проверка соединения при старте
 pool.connect()
-  .then(() => console.log('→ PostgreSQL (Supabase) подключён успешно'))
+  .then(() => console.log('→ PostgreSQL подключён успешно'))
   .catch(err => {
     console.error('Ошибка подключения к PostgreSQL:', err.message);
     process.exit(1);
   });
 
-// Инициализация таблиц (идемпотентно)
+// Инициализация таблиц
 async function initDB() {
   try {
     await pool.query(`
@@ -36,13 +32,14 @@ async function initDB() {
       );
 
       CREATE TABLE IF NOT EXISTS cars (
-        id                  SERIAL PRIMARY KEY,
-        user_id             TEXT NOT NULL,
-        car_name            TEXT NOT NULL,
-        reg_number          TEXT,
-        mileage             INTEGER DEFAULT 0,
-        oil_change_interval INTEGER DEFAULT 10000,
-        created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        id                        SERIAL PRIMARY KEY,
+        user_id                   TEXT NOT NULL,
+        car_name                  TEXT NOT NULL,
+        reg_number                TEXT,
+        mileage                   INTEGER DEFAULT 0,
+        mileage_last_oil_change   INTEGER DEFAULT 0,           -- НОВОЕ ПОЛЕ
+        oil_change_interval       INTEGER DEFAULT 10000,
+        created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS fuel_records (
@@ -69,21 +66,7 @@ async function initDB() {
       );
     `);
 
-    // Проверяем и добавляем колонку mileage только если её нет
-    const colCheck = await pool.query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'car_expenses' AND column_name = 'mileage'
-    `);
-
-    if (colCheck.rowCount === 0) {
-      await pool.query('ALTER TABLE car_expenses ADD COLUMN mileage INTEGER');
-      console.log('Колонка mileage добавлена в car_expenses');
-    } else {
-      console.log('Колонка mileage уже существует — пропускаем');
-    }
-
-    console.log('✅ Все таблицы проверены и готовы');
+    console.log('✅ База готова');
   } catch (err) {
     console.error('Ошибка инициализации базы:', err.message);
   }
@@ -91,67 +74,12 @@ async function initDB() {
 
 initDB().catch(console.error);
 
-// Health-check для Render и Telegram
+// Health-check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', env: process.env.NODE_ENV || 'development' });
 });
 
-// ─── АДАПТИРОВАННЫЕ МАРШРУТЫ ────────────────────────────────────────
-
-app.get('/api/expenses', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM expenses ORDER BY created_at DESC');
-    res.json(result.rows);
-  } catch (e) {
-    console.error('GET /api/expenses:', e.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.post('/api/expenses', async (req, res) => {
-  try {
-    const { title, amount } = req.body;
-    if (!title || !amount) return res.status(400).json({ error: 'title и amount обязательны' });
-    
-    const result = await pool.query(
-      'INSERT INTO expenses (title, amount) VALUES ($1, $2) RETURNING *',
-      [title, amount]
-    );
-    res.json(result.rows[0]);
-  } catch (e) {
-    console.error('POST /api/expenses:', e.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.put('/api/expenses/:id', async (req, res) => {
-  try {
-    const { title, amount } = req.body;
-    const result = await pool.query(
-      'UPDATE expenses SET title = $1, amount = $2 WHERE id = $3 RETURNING *',
-      [title, amount, req.params.id]
-    );
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Запись не найдена' });
-    res.json(result.rows[0]);
-  } catch (e) {
-    console.error('PUT /api/expenses:', e.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.delete('/api/expenses/:id', async (req, res) => {
-  try {
-    const result = await pool.query('DELETE FROM expenses WHERE id = $1', [req.params.id]);
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Запись не найдена' });
-    res.json({ success: true });
-  } catch (e) {
-    console.error('DELETE /api/expenses:', e.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ─── API ДЛЯ АВТО ───────────────────────────────────────────────────
-
+// Список автомобилей пользователя
 app.get('/cars/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -161,53 +89,59 @@ app.get('/cars/:userId', async (req, res) => {
     );
     res.json(result.rows);
   } catch (e) {
-    console.error('GET /cars:', e.message);
+    console.error('GET /cars error:', e.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+// Добавление автомобиля
 app.post('/add-car', async (req, res) => {
   try {
-    const { user_id, car_name, reg_number, mileage = 0 } = req.body;
+    const { user_id, car_name, reg_number, mileage = 0, mileage_last_oil_change = 0, oil_change_interval = 10000 } = req.body;
     if (!user_id || !car_name) {
       return res.status(400).json({ error: 'user_id и car_name обязательны' });
     }
     const result = await pool.query(
-      `INSERT INTO cars (user_id, car_name, reg_number, mileage)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [user_id, car_name, reg_number || null, Number(mileage)]
+      `INSERT INTO cars (user_id, car_name, reg_number, mileage, mileage_last_oil_change, oil_change_interval)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [user_id, car_name, reg_number || null, Number(mileage), Number(mileage_last_oil_change), Number(oil_change_interval)]
     );
     res.json(result.rows[0]);
   } catch (e) {
-    console.error('POST /add-car:', e.message);
+    console.error('POST /add-car error:', e.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+// Обновление настроек авто
 app.put('/update-car/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { car_name, reg_number, mileage, oil_change_interval } = req.body;
+    const { car_name, reg_number, mileage, mileage_last_oil_change, oil_change_interval } = req.body;
+
     const result = await pool.query(
       `UPDATE cars
-       SET car_name = $1, reg_number = $2, mileage = $3, oil_change_interval = $4
-       WHERE id = $5 RETURNING *`,
+       SET car_name = $1, reg_number = $2, mileage = $3, mileage_last_oil_change = $4, oil_change_interval = $5
+       WHERE id = $6 RETURNING *`,
       [
         car_name,
         reg_number || null,
         Number(mileage) || 0,
+        Number(mileage_last_oil_change) || 0,
         Number(oil_change_interval) || 10000,
         id
       ]
     );
+
     if (result.rowCount === 0) return res.status(404).json({ error: 'Авто не найдено' });
     res.json(result.rows[0]);
   } catch (e) {
-    console.error('PUT /update-car:', e.message);
+    console.error('PUT /update-car error:', e.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+// Удаление авто
 app.delete('/cars/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -217,19 +151,26 @@ app.delete('/cars/:id', async (req, res) => {
     if (result.rowCount === 0) return res.status(404).json({ error: 'Авто не найдено' });
     res.json({ success: true });
   } catch (e) {
-    console.error('DELETE /cars:', e.message);
+    console.error('DELETE /cars error:', e.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// ─── ДАШБОРД ────────────────────────────────────────────────────────
-
+// Дашборд (с расчётом масла от последней замены)
 app.get('/dashboard/:carId', async (req, res) => {
   try {
     const { carId } = req.params;
     const carRes = await pool.query('SELECT * FROM cars WHERE id = $1', [carId]);
     const car = carRes.rows[0];
     if (!car) return res.status(404).json({ error: 'Авто не найдено' });
+
+    // Расчёт остатка до замены масла
+    const lastOil = car.mileage_last_oil_change || 0;
+    const interval = car.oil_change_interval || 10000;
+    const current = car.mileage || 0;
+    const driven = current - lastOil;
+    const remaining = interval - driven;
+    const percent = Math.min(Math.max((driven / interval) * 100, 0), 100);
 
     const fuelRes = await pool.query(
       `SELECT id, 'fuel' AS type, '⛽ Заправка' AS category, amount, liters, price_per_liter, 
@@ -249,15 +190,21 @@ app.get('/dashboard/:carId', async (req, res) => {
       (a, b) => new Date(b.date) - new Date(a.date)
     );
 
-    res.json({ car, history });
+    res.json({ 
+      car: {
+        ...car,
+        oil_remaining: remaining > 0 ? remaining : 'Просрочено',
+        oil_percent: percent
+      }, 
+      history 
+    });
   } catch (e) {
-    console.error('GET /dashboard:', e.message);
+    console.error('GET /dashboard error:', e.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// ─── ЗАПРАВКА ───────────────────────────────────────────────────────
-
+// Добавление заправки
 app.post('/add-fuel', async (req, res) => {
   try {
     const { car_id, amount, liters, price_per_liter, mileage, full_tank, station_name, comments } = req.body;
@@ -280,13 +227,12 @@ app.post('/add-fuel', async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (e) {
-    console.error('POST /add-fuel:', e.message);
+    console.error('POST /add-fuel error:', e.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// ─── ОСТАЛЬНЫЕ МАРШРУТЫ (аналогично адаптированы) ──────────────────
-
+// Остальные маршруты (add-expense, stats, update/delete) — без изменений, они уже работают
 app.post('/add-expense', async (req, res) => {
   try {
     const { car_id, category, amount, mileage, comments } = req.body;
@@ -413,8 +359,7 @@ app.delete('/car-expenses/:id', async (req, res) => {
   }
 });
 
-// Запуск сервера (Render сам подставит PORT)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT} (Render/Supabase mode)`);
+  console.log(`🚀 Сервер запущен на порту ${PORT} (Render mode)`);
 });
