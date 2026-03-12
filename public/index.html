@@ -842,7 +842,7 @@
         localStorage.setItem('autolife_user_id', USER_ID);
     }*/
 
-    let USER_ID;
+    /*let USER_ID;
     const API_URL = 'https://autolife-pro.onrender.com';
 
     if (window.Telegram?.WebApp) {
@@ -858,8 +858,45 @@
         console.log('Telegram ID установлен:', USER_ID);
     } else {
         console.warn('Telegram WebApp user не найден, используем локальный USER_ID');
+    }*/
+
+let USER_ID;
+
+if (window.Telegram?.WebApp) {
+    try {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+
+        const initData = window.Telegram.WebApp.initDataUnsafe;
+        const tgUser = initData?.user;
+
+        console.log('Telegram initDataUnsafe:', initData); // ← для отладки
+
+        if (tgUser?.id) {
+            USER_ID = 'tg_' + tgUser.id;
+            localStorage.setItem('autolife_user_id', USER_ID);
+            console.log('✅ Успешно получен Telegram ID:', USER_ID);
+        } else {
+            console.warn('Telegram user не найден в initDataUnsafe');
+            showToast('Не удалось получить ваш Telegram ID. Попробуйте перезапустить приложение.');
+        }
+    } catch (err) {
+        console.error('Ошибка инициализации Telegram WebApp:', err);
+        showToast('Ошибка запуска в Telegram. Попробуйте заново.');
     }
 }
+
+// Fallback — если не в Telegram или ID не получен
+if (!USER_ID) {
+    USER_ID = localStorage.getItem('autolife_user_id');
+    if (!USER_ID) {
+        USER_ID = 'user_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+        localStorage.setItem('autolife_user_id', USER_ID);
+    }
+    console.log('Fallback USER_ID:', USER_ID);
+}
+
+
 
     function applyUserTheme() {
     const select = document.getElementById('themeSelect');
