@@ -862,65 +862,54 @@
 
 const API_URL = 'https://autolife-pro.onrender.com';
     
-let USER_ID = null; // изначально null, чтобы не было случайных значений
+USER_ID = null;
 
-// Ждём, пока Telegram WebApp полностью загрузится
-function initTelegramAuth() {
+function forceTelegramUserId() {
     if (window.Telegram?.WebApp) {
-        console.log('Telegram WebApp обнаружен');
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
 
-        try {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
+        const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe || {};
+        const user = initDataUnsafe.user;
 
-            const initData = window.Telegram.WebApp.initDataUnsafe;
-            console.log('initDataUnsafe:', initData); // ← покажет всё, что пришло
-
-            const tgUser = initData?.user;
-            if (tgUser?.id) {
-                USER_ID = 'tg_' + tgUser.id;
-                localStorage.setItem('autolife_user_id', USER_ID);
-                console.log('✅ Telegram ID успешно установлен:', USER_ID);
-                console.log('Пользователь:', tgUser.first_name, tgUser.last_name, tgUser.username);
-            } else {
-                console.warn('Telegram user ID не найден');
-                showToast('Не удалось получить ваш Telegram ID');
-            }
-        } catch (err) {
-            console.error('Ошибка инициализации Telegram:', err);
-            showToast('Ошибка запуска в Telegram');
-        }
-    } else {
-        console.warn('Приложение не запущено внутри Telegram WebApp');
-    }
-
-    // Fallback только если Telegram вообще не сработал
-    if (!USER_ID) {
-        USER_ID = localStorage.getItem('autolife_user_id');
-        if (!USER_ID) {
-            USER_ID = 'user_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+        if (user?.id) {
+            USER_ID = 'tg_' + user.id;
             localStorage.setItem('autolife_user_id', USER_ID);
+            console.log("✅ USER_ID принудительно получен:", USER_ID);
+            return true;
+        } else {
+            console.warn("Telegram user не найден даже после ready()");
         }
-        console.log('Fallback USER_ID:', USER_ID);
     }
+    return false;
 }
 
-// Запускаем инициализацию сразу + ждём события ready
-if (window.Telegram?.WebApp) {
-    initTelegramAuth();
-} else {
-    // Если Telegram ещё не загрузился — ждём событие
-    window.addEventListener('TelegramWebAppReady', initTelegramAuth, { once: true });
-}
+// Пробуем сразу + несколько раз с задержкой
+window.addEventListener('load', () => {
+    if (!forceTelegramUserId()) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+            attempts++;
+            if (forceTelegramUserId() || attempts >= 8) {
+                clearInterval(interval);
+                if (!USER_ID) {
+                    // последний fallback
+                    USER_ID = localStorage.getItem('autolife_user_id') || 'temp_' + Date.now();
+                    console.warn("Использован fallback USER_ID:", USER_ID);
+                }
+                startApp();           // ← ваша функция запуска после получения ID
+            }
+        }, 400);
+    } else {
+        startApp();
+    }
+});
 
-// Запуск приложения (только после попытки авторизации)
-window.onload = async () => {
-    console.log('Приложение загружено. Финальный USER_ID:', USER_ID);
+function startApp() {
+    console.log("Запуск приложения с USER_ID =", USER_ID);
     applyUserTheme();
-    await loadCars();
-    toggleRecordFields();
-    updateServiceFieldsVisibility();
-};
+    loadCars();               // или как у вас запускается
+}
 
 
 
