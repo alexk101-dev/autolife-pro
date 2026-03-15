@@ -836,88 +836,110 @@
 <script>
  
 const API_URL = 'https://autolife-pro.onrender.com';
-let USER_ID = null;
-//ggiiu
-function initTelegramAuth() {
-        if (window.Telegram?.WebApp) {
-            window.Telegram.WebApp.ready();     // ← ОБЯЗАТЕЛЬНО
-            window.Telegram.WebApp.expand();    // разворачиваем на весь экран
 
-            const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
-            if (tgUser?.id) {
-                USER_ID = "tg_" + tgUser.id;
-                localStorage.setItem("autolife_user_id", USER_ID);
-                console.log("✅ Telegram ID успешно установлен:", USER_ID, tgUser);
-                return; // выходим — не используем fallback
-            } else {
-                console.warn("Telegram user.id не найден в initDataUnsafe");
-            }
-        }
-    USER_ID = localStorage.getItem("autolife_user_id");
-        if (!USER_ID) {
-            USER_ID = "user_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
-            localStorage.setItem("autolife_user_id", USER_ID);
-        }
-        console.log("Fallback user ID:", USER_ID);
-    }
-
-async function startApp() {
-
-    initTelegramAuth();
-        console.log("🚀 USER_ID после инициализации:", USER_ID);
-
-        applyUserTheme();
-        await loadCars();           // теперь будет работать с правильным USER_ID
-        toggleRecordFields();
-        updateServiceFieldsVisibility();
-
-}
-
-    function applyUserTheme() {
-    const select = document.getElementById('themeSelect');
-    const saved = localStorage.getItem('user_theme_choice') || 'system';
-    const choice = select ? select.value : saved;
-
-    let effective = choice;
-    if (choice === 'system') {
-        effective = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-
-    document.documentElement.setAttribute('data-theme', effective);
-    localStorage.setItem('user_theme_choice', choice);
-
-    // Если системная — реагируем на изменение темы устройства
-    if (choice === 'system') {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyUserTheme);
-    }
-}
-
-
-
+   let USER_ID = null;
     let currentCarId = null;
     let currentCarData = null;
     let allCars = [];
-    let charts = { category: null, price: null };
     let editingRecord = null;
+    let charts = {};
 
+    // ────────────────────────────────────────────────
+    //  Получение Telegram ID (самый надёжный способ 2025–2026)
+    // ────────────────────────────────────────────────
+    function getTelegramUserId() {
+        console.log("[TG] Начало получения user ID");
 
+        // Вариант A: классический (иногда работает)
+        if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+            USER_ID = "tg_" + window.Telegram.WebApp.initDataUnsafe.user.id;
+            console.log("[TG] Получен из initDataUnsafe:", USER_ID);
+            localStorage.setItem("autolife_user_id", USER_ID);
+            return true;
+        }
 
-// Безопасное экранирование HTML (чтобы избежать XSS)
-function escapeHtml(unsafe) {
-    if (unsafe == null) return '';
-    return String(unsafe)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
+        // Вариант B: основной — tgWebAppData в хэше URL
+        const hash = window.location.hash.substring(1);
+        if (hash) {
+            const params = new URLSearchParams(hash);
+            const tgDataRaw = params.get("tgWebAppData");
 
-// Применение выбранной темы (системная/светлая/тёмная)
+            if (tgDataRaw) {
+                try {
+                    const tgParams = new URLSearchParams(tgDataRaw);
+                    const userEncoded = tgParams.get("user");
 
+                    if (userEncoded) {
+                        const userJson = decodeURIComponent(userEncoded);
+                        const user = JSON.parse(userJson);
 
+                        if (user?.id) {
+                            USER_ID = "tg_" + user.id;
+                            console.log("[TG] УСПЕХ → user.id из tgWebAppData:", user.id);
+                            console.log("[TG] Полный user:", user);
+                            localStorage.setItem("autolife_user_id", USER_ID);
+                            return true;
+                        }
+                    }
+                } catch (err) {
+                    console.error("[TG] Ошибка парсинга tgWebAppData:", err);
+                }
+            }
+        }
 
+        // Fallback
+        console.warn("[TG] Telegram ID не найден → fallback");
+        USER_ID = localStorage.getItem("autolife_user_id") ||
+                  "local_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        localStorage.setItem("autolife_user_id", USER_ID);
+        return false;
+    }
 
+    // ────────────────────────────────────────────────
+    //  Запуск приложения
+    // ────────────────────────────────────────────────
+    function startApp() {
+        const gotTgId = getTelegramUserId();
+        console.log("[APP] USER_ID после инициализации:", USER_ID);
+
+        loadCars()
+            .then(() => {
+                toggleRecordFields();
+                updateServiceFieldsVisibility();
+            })
+            .catch(err => {
+                console.error("[APP] Ошибка запуска:", err);
+                showToast("Ошибка запуска приложения");
+            });
+    }
+
+    // ────────────────────────────────────────────────
+    //  Загрузка списка автомобилей (с проверкой USER_ID)
+    // ────────────────────────────────────────────────
+    async function loadCars() {
+        if (!USER_ID) {
+            console.error("[loadCars] USER_ID не установлен!");
+            showToast("Ошибка: пользователь не идентифицирован");
+            return;
+        }
+
+        console.log("[loadCars] Запрос для:", USER_ID);
+
+        try {
+            const res = await fetch(`${API_URL}/cars/${USER_ID}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const cars = await res.json();
+            allCars = cars || [];
+            updateCarList(allCars);
+
+            if (allCars.length > 0 && !currentCarId) {
+                await selectCar(allCars[0].id);
+            }
+        } catch (err) {
+            console.error("[loadCars] Ошибка:", err);
+            showToast("Не удалось загрузить автомобили");
+        }
+    }
     // ================ ТЕМА (без изменений) ================
     function detectInitialTheme() {
         // Попытка взять тему из Telegram WebApp, если открыто внутри Telegram
@@ -964,15 +986,7 @@ function escapeHtml(unsafe) {
         applyTheme(next);
     }
 
-    // ================ ИНИЦИАЛИЗАЦИЯ ================
-    /*window.onload = async () => {
-        
-        applyUserTheme();
-        console.log('🚀 Приложение запущено. USER_ID =', USER_ID);
-        await loadCars();
-        toggleRecordFields();
-        updateServiceFieldsVisibility();
-    };*/
+    
 // ================ УВЕДОМЛЕНИЯ ================
     function showToast(message) {
         const toast = document.createElement('div');
@@ -989,60 +1003,12 @@ function escapeHtml(unsafe) {
         document.getElementById(modalId).classList.add('hidden');
     }
     // ================ АВТОМОБИЛИ — ИСПРАВЛЕНО С ЛОГИРОВАНИЕМ ================
-    async function loadCars() {
-        if (!USER_ID) {
-            console.error("USER_ID не установлен");
-            return;
-        }
-
-        try {
-            const res = await fetch(`${API_URL}/cars/${USER_ID}`); // ← исправлено на полный URL
-            if (!res.ok) throw new Error("Server error");
-
-            const cars = await res.json();
-            allCars = cars;                 // сохраняем глобально
-            updateCarList(cars);
-
-            if (cars.length > 0 && !currentCarId) {
-                await selectCar(cars[0].id);
-            }
-        } catch (err) {
-            console.error("Ошибка загрузки авто:", err);
-            showToast("Ошибка загрузки авто");
-        }
-    }
-
-    function updateCarList(cars) {
-        const carList = document.getElementById('carList');
-        console.log(`Обновление списка чипов: ${cars.length} авто`);
-
-        if (cars.length === 0) {
-            carList.innerHTML = `
-                <div class="empty-state" style="padding: 12px 0;">
-                    <div class="empty-icon" style="font-size:32px; margin-bottom:8px;">🚗</div>
-                    <div>Добавьте ваш первый автомобиль</div>
-                </div>
-            `;
-            return;
-        }
-
-        carList.innerHTML = cars.map(car => `
-            <div class="car-chip ${car.id === currentCarId ? 'active' : ''}"
-                 onclick="selectCar(${car.id})">
-                <div class="car-chip-title">${escapeHtml(car.car_name)}</div>
-                <div class="car-chip-sub">
-                    ${escapeHtml(car.reg_number || '—')} · ${(Number(car.mileage) || 0).toLocaleString('ru-RU')} км
-                </div>
-            </div>
-        `).join('');
-    }
-
-    function showAddCarModal() {
+    
         document.getElementById('newCarName').value = '';
         document.getElementById('newCarReg').value = '';
         document.getElementById('newCarMileage').value = '';
         showModal('addCarModal');
-    }
+    
     
     function handleSelectCarFromModal(id) {
         selectCar(id);
@@ -1676,6 +1642,7 @@ function escapeHtml(unsafe) {
     }
     
     // Глобальные экспорты
+    // Глобальные экспорты (оставляем как было)
     window.switchTab = switchTab;
     window.toggleRecordFields = toggleRecordFields;
     window.saveRecord = saveRecord;
@@ -1694,7 +1661,7 @@ function escapeHtml(unsafe) {
     window.deleteCar = deleteCar;
 
     // Запуск
-    window.onload = startApp;
+    window.addEventListener('load', startApp);
 </script>
 </body>
 </html>
