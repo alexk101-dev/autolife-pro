@@ -833,10 +833,8 @@
     </div>
 </div>
 
-// Исправленный код для вставки в index.html (замените существующий скрипт)
 
-// Исправленный код для вставки в index.html (замените существующий скрипт)
-
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 const API_URL = 'https://autolife-pro.onrender.com';
 let USER_ID = null;
@@ -847,44 +845,65 @@ let charts = { category: null, price: null };
 let editingRecord = null;
 
 // ================ АВТОРИЗАЦИЯ ================
-function initTelegramAuth() {
-    console.log("🔄 Инициализация Telegram...");
+function getTelegramUserId() {
+    console.log("[TG] Начало получения user ID");
     
-    // Проверяем, открыто ли приложение в Telegram
+    // Способ 1: Прямой доступ к Telegram WebApp (после подключения скрипта)
     if (window.Telegram?.WebApp) {
         try {
-            // Обязательные вызовы для Telegram WebApp
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
             
-            const initData = window.Telegram.WebApp.initDataUnsafe;
-            console.log("Telegram initData:", initData);
-            
-            if (initData?.user?.id) {
-                USER_ID = "tg_" + initData.user.id;
+            // Получаем данные пользователя
+            const user = window.Telegram.WebApp.initDataUnsafe?.user;
+            if (user?.id) {
+                USER_ID = "tg_" + user.id;
+                console.log("[TG] Успех! ID пользователя:", USER_ID, user.first_name);
                 localStorage.setItem("autolife_user_id", USER_ID);
-                console.log("✅ Авторизация через Telegram:", USER_ID, initData.user);
                 return true;
             } else {
-                console.warn("⚠️ Telegram user не найден в initDataUnsafe");
+                console.warn("[TG] initDataUnsafe.user не найден");
             }
         } catch (e) {
-            console.error("Ошибка при работе с Telegram API:", e);
+            console.error("[TG] Ошибка доступа к WebApp:", e);
         }
     } else {
-        console.log("ℹ️ Приложение запущено не в Telegram, используется localStorage");
+        console.log("[TG] Не в Telegram или скрипт не загружен");
     }
     
-    // Fallback: используем сохраненный ID или генерируем новый
-    USER_ID = localStorage.getItem("autolife_user_id");
-    if (!USER_ID) {
-        USER_ID = "user_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
-        localStorage.setItem("autolife_user_id", USER_ID);
-        console.log("🆕 Сгенерирован новый USER_ID:", USER_ID);
-    } else {
-        console.log("📱 Используется сохраненный USER_ID:", USER_ID);
+    // Способ 2: Парсинг из URL (на случай если открыто через ссылку)
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tgWebAppData = urlParams.get('tgWebAppData');
+        if (tgWebAppData) {
+            const tgParams = new URLSearchParams(tgWebAppData);
+            const userStr = tgParams.get('user');
+            if (userStr) {
+                const user = JSON.parse(decodeURIComponent(userStr));
+                if (user?.id) {
+                    USER_ID = "tg_" + user.id;
+                    console.log("[TG] Из URL:", USER_ID);
+                    localStorage.setItem("autolife_user_id", USER_ID);
+                    return true;
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[TG] Ошибка парсинга URL:", e);
     }
-    return true;
+    
+    // Fallback: проверяем localStorage
+    USER_ID = localStorage.getItem("autolife_user_id");
+    if (USER_ID && USER_ID.startsWith('tg_')) {
+        console.log("[TG] Восстановлен из localStorage:", USER_ID);
+        return true;
+    }
+    
+    // Генерируем временный ID для тестирования
+    USER_ID = "test_" + Date.now().toString(36);
+    localStorage.setItem("autolife_user_id", USER_ID);
+    console.log("[TG] Временный тестовый ID:", USER_ID);
+    return false;
 }
 
 // ================ ТЕМА ================
@@ -904,12 +923,7 @@ function applyUserTheme() {
 }
 
 // Слушаем изменение системной темы
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    const select = document.getElementById('themeSelect');
-    if (select && select.value === 'system') {
-        applyUserTheme();
-    }
-});
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyUserTheme);
 
 // ================ УВЕДОМЛЕНИЯ ================
 function showToast(message) {
@@ -943,39 +957,38 @@ function escapeHtml(unsafe) {
 // ================ АВТОМОБИЛИ ================
 async function loadCars() {
     if (!USER_ID) {
-        console.error("❌ USER_ID не установлен");
-        showToast("Ошибка авторизации");
+        console.error("[loadCars] USER_ID не установлен!");
+        showToast("Ошибка: пользователь не идентифицирован");
         return;
     }
 
-    console.log("🔄 Загрузка автомобилей для USER_ID:", USER_ID);
+    console.log("[loadCars] Запрос автомобилей для:", USER_ID);
 
     try {
         const res = await fetch(`${API_URL}/cars/${USER_ID}`);
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
-        
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
         const cars = await res.json();
-        console.log(`✅ Загружено ${cars.length} автомобилей:`, cars);
-        
-        allCars = cars;
-        updateCarList(cars);
+        console.log(`[loadCars] Загружено ${cars.length} автомобилей`);
+        allCars = cars || [];
+        updateCarList(allCars);
 
-        if (cars.length > 0 && !currentCarId) {
-            await selectCar(cars[0].id);
-        } else if (cars.length === 0) {
+        if (allCars.length > 0 && !currentCarId) {
+            await selectCar(allCars[0].id);
+        } else if (allCars.length === 0) {
             // Показываем пустое состояние
             document.getElementById('historyList').innerHTML = '';
             document.getElementById('historyEmpty').classList.remove('hidden');
         }
     } catch (err) {
-        console.error("❌ Ошибка загрузки авто:", err);
-        showToast("Ошибка загрузки авто");
+        console.error("[loadCars] Ошибка:", err);
+        showToast("Не удалось загрузить список автомобилей");
     }
 }
 
 function updateCarList(cars) {
     const carList = document.getElementById('carList');
-    console.log(`Обновление списка чипов: ${cars.length} авто`);
 
     if (cars.length === 0) {
         carList.innerHTML = `
@@ -1015,7 +1028,7 @@ async function addNewCar() {
         return;
     }
 
-    console.log("🔄 Добавление авто:", { name, reg, mileage, USER_ID });
+    console.log("[addNewCar] Добавление авто:", { name, reg, mileage, USER_ID });
 
     try {
         const response = await fetch(`${API_URL}/add-car`, {
@@ -1033,22 +1046,21 @@ async function addNewCar() {
 
         if (response.ok) {
             hideModal('addCarModal');
-            showToast('✅ Авто успешно добавлено');
+            showToast('Авто успешно добавлено');
             await loadCars();
             hideModal('carsModal');
         } else {
             const err = await response.json();
-            console.error('❌ Ошибка сервера:', err);
+            console.error('Ошибка сервера:', err);
             showToast(err.error || 'Ошибка добавления');
         }
     } catch (error) {
-        console.error('❌ Ошибка сети:', error);
+        console.error('Ошибка сети:', error);
         showToast('Ошибка сети при добавлении');
     }
 }
 
 function openCarsModal() {
-    console.log('Открытие модалки "Все авто". Всего авто:', allCars.length);
     const listEl = document.getElementById('carsModalList');
     if (!listEl) return;
 
@@ -1109,15 +1121,15 @@ async function deleteCar(id) {
             currentCarId = null;
             currentCarData = null;
         }
-        showToast('✅ Авто удалён');
+        showToast('Авто удалён');
     } catch (e) {
-        console.error('❌ Ошибка удаления авто:', e);
+        console.error('Ошибка удаления авто:', e);
         showToast('Ошибка удаления авто');
     }
 }
 
 async function selectCar(carId) {
-    console.log("🔄 Выбор авто:", carId);
+    console.log("[selectCar] Выбор авто:", carId);
     currentCarId = carId;
     updateCarList(allCars);
     await loadDashboard();
@@ -1131,8 +1143,6 @@ function calculateFuelConsumption(history) {
     const fuels = history
         .filter(h => h.type === 'fuel')
         .sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    console.log('Заправки для расчета:', fuels);
     
     if (fuels.length < 2) return '0.0';
     
@@ -1152,7 +1162,7 @@ async function loadDashboard() {
     try {
         const response = await fetch(`${API_URL}/dashboard/${currentCarId}`);
         const data = await response.json();
-        console.log('Данные дашборда:', data);
+        console.log('[loadDashboard] Данные:', data);
         currentCarData = data;
         updateDashboardUI();
     } catch (error) {
@@ -1225,12 +1235,8 @@ function updateHistoryUI(history) {
             <div class="history-right">
                 <div class="history-amount ${item.type}">-${item.amount.toLocaleString()} ₽</div>
                 <div class="history-actions">
-                    <button class="icon-btn" onclick="editHistoryItem('${item.type}', ${item.id}); event.stopPropagation();">
-                        ✏️
-                    </button>
-                    <button class="icon-btn" onclick="deleteHistoryItem('${item.type}', ${item.id}); event.stopPropagation();">
-                        🗑
-                    </button>
+                    <button class="icon-btn" onclick="editHistoryItem('${item.type}', ${item.id}); event.stopPropagation();">✏️</button>
+                    <button class="icon-btn" onclick="deleteHistoryItem('${item.type}', ${item.id}); event.stopPropagation();">🗑</button>
                 </div>
             </div>
         </div>
@@ -1279,7 +1285,6 @@ async function saveRecord() {
             payload.price_per_liter = amount / liters;
             payload.full_tank = document.getElementById('fullTank').checked;
             payload.station_name = document.getElementById('station').value;
-            payload.comments = comment;
             
             const url = editingRecord && editingRecord.type === 'fuel'
                 ? `${API_URL}/fuel-records/${editingRecord.id}`
@@ -1634,12 +1639,29 @@ function quickAction(action) {
     toggleRecordFields();
 }
 
+// ================ ФУНКЦИЯ ОТЛАДКИ ================
+function debugTelegram() {
+    console.log("=== Telegram Debug Info ===");
+    console.log("Telegram.WebApp доступен:", !!window.Telegram?.WebApp);
+    console.log("USER_ID:", USER_ID);
+    console.log("localStorage autolife_user_id:", localStorage.getItem("autolife_user_id"));
+    
+    if (window.Telegram?.WebApp) {
+        console.log("initDataUnsafe:", window.Telegram.WebApp.initDataUnsafe);
+        console.log("initData:", window.Telegram.WebApp.initData);
+    }
+    
+    console.log("All cars:", allCars);
+    console.log("Current car:", currentCarData?.car);
+    console.log("==========================");
+}
+
 // ================ ЗАПУСК ================
 async function startApp() {
     console.log("🚀 Запуск приложения...");
     
-    // Инициализация Telegram авторизации
-    initTelegramAuth();
+    // Получаем Telegram ID
+    getTelegramUserId();
     
     // Применяем тему
     applyUserTheme();
@@ -1672,9 +1694,10 @@ window.openCarsModal = openCarsModal;
 window.handleSelectCarFromModal = handleSelectCarFromModal;
 window.deleteCar = deleteCar;
 window.applyUserTheme = applyUserTheme;
+window.debugTelegram = debugTelegram;
 
 // Запуск при загрузке страницы
-window.onload = startApp;
+window.addEventListener('load', startApp);
 </script>
 </body>
 </html>
