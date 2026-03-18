@@ -1,63 +1,24 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const crypto = require('crypto');
-const { body, validationResult } = require('express-validator');
 
 const app = express();
 
-// Базовые middleware безопасности
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://telegram.org"],
-            fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'"]
-        }
-    }
-}));
-
-// CORS с ограничениями
+// CORS для Telegram
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? [process.env.RENDER_EXTERNAL_URL || 'https://autolife-pro.onrender.com', 'https://t.me'] 
-        : '*',
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data']
+    allowedHeaders: ['Content-Type']
 }));
 
-// Парсинг JSON с ограничением размера
-app.use(express.json({ limit: '10kb' }));
-
-// Rate limiting
-const apiLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 минута
-    max: 30, // максимум 30 запросов в минуту
-    message: { error: 'Слишком много запросов, попробуйте позже' },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-// Применяем rate limiting ко всем API маршрутам
-app.use('/api/', apiLimiter);
-app.use('/add-car', apiLimiter);
-app.use('/add-fuel', apiLimiter);
-app.use('/add-expense', apiLimiter);
+app.use(express.json());
 
 // Подключение к базе
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false // для Render PostgreSQL
-    },
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+        rejectUnauthorized: false
+    }
 });
 
 pool.connect()
@@ -67,7 +28,7 @@ pool.connect()
         process.exit(1);
     });
 
-// Инициализация таблиц
+// Создание таблиц
 async function initDB() {
     try {
         await pool.query(`
@@ -104,29 +65,7 @@ async function initDB() {
                 comments   TEXT,
                 date       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
-
-            CREATE TABLE IF NOT EXISTS audit_log (
-                id SERIAL PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                action TEXT NOT NULL,
-                target_id INTEGER,
-                ip_address TEXT,
-                user_agent TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
         `);
-
-        // Проверяем и добавляем колонку mileage если её нет
-        const colCheck = await pool.query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'car_expenses' AND column_name = 'mileage'
-        `);
-
-        if (colCheck.rowCount === 0) {
-            await pool.query('ALTER TABLE car_expenses ADD COLUMN mileage INTEGER');
-            console.log('Колонка mileage добавлена в car_expenses');
-        }
 
         console.log('✅ База готова');
     } catch (err) {
@@ -136,135 +75,63 @@ async function initDB() {
 
 initDB().catch(console.error);
 
-// Функция для логирования аудита
-async function logAudit(userId, action, targetId, req) {
-    try {
-        await pool.query(
-            `INSERT INTO audit_log (user_id, action, target_id, ip_address, user_agent, timestamp)
-             VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [userId, action, targetId, req.ip, req.get('User-Agent')]
-        );
-    } catch (error) {
-        console.error('Audit log error:', error);
-    }
-}
-
-// Проверка Telegram данных
-function verifyTelegramInitData(initData) {
-    try {
-        if (!initData) return false;
-        
-        const params = new URLSearchParams(initData);
-        const hash = params.get('hash');
-        
-        if (!hash) return false;
-        
-        const dataToCheck = [];
-        params.sort();
-        params.forEach((value, key) => {
-            if (key !== 'hash') {
-                dataToCheck.push(`${key}=${value}`);
-            }
-        });
-        
-        // В продакшене токен должен быть в переменных окружения
-        const botToken = process.env.TELEGRAM_BOT_TOKEN;
-        if (!botToken) {
-            console.log('⚠️ TELEGRAM_BOT_TOKEN не установлен - пропускаем проверку');
-            return true; // Временно пропускаем проверку для отладки
-        }
-        
-        const secret = crypto.createHmac('sha256', 'WebAppData')
-            .update(botToken);
-        const calculatedHash = crypto.createHmac('sha256', secret.digest())
-            .update(dataToCheck.join('\n'))
-            .digest('hex');
-        
-        return calculatedHash === hash;
-    } catch (error) {
-        console.error('Telegram verification error:', error);
-        return false;
-    }
-}
-
-// Middleware для проверки авторизации (упрощенная версия для отладки)
-async function authMiddleware(req, res, next) {
+// Middleware для проверки Telegram ID
+function validateTelegramId(req, res, next) {
     const userId = req.params.userId || req.body.user_id || req.query.user_id;
     
-    console.log(`[Auth] Запрос от userId: ${userId}`);
-    console.log(`[Auth] Headers:`, req.headers);
-    
-    // Временно пропускаем все запросы для отладки
-    if (userId) {
-        console.log(`[Auth] Разрешаем доступ для: ${userId}`);
-        return next();
+    // Проверяем, что ID начинается с tg_ (наш формат)
+    if (!userId || !userId.startsWith('tg_')) {
+        console.log('❌ Невалидный Telegram ID:', userId);
+        return res.status(401).json({ error: 'Недействительный Telegram ID' });
     }
     
-    return res.status(401).json({ error: 'Требуется авторизация' });
+    console.log('✅ Telegram ID валидный:', userId);
+    next();
 }
 
-// Health-check
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', env: process.env.NODE_ENV || 'development' });
-});
-
-// Список автомобилей пользователя
-app.get('/cars/:userId', authMiddleware, async (req, res) => {
+// Получить автомобили пользователя
+app.get('/cars/:userId', validateTelegramId, async (req, res) => {
     const { userId } = req.params;
-    console.log(`[API] GET /cars/${userId}`);
+    console.log(`GET /cars/${userId}`);
     
     try {
         const result = await pool.query(
-            'SELECT id, car_name, reg_number, mileage, mileage_last_oil_change, oil_change_interval FROM cars WHERE user_id = $1 ORDER BY created_at DESC',
+            'SELECT * FROM cars WHERE user_id = $1 ORDER BY created_at DESC',
             [userId]
         );
-        
-        console.log(`[API] Найдено автомобилей: ${result.rows.length} для пользователя ${userId}`);
         res.json(result.rows);
     } catch (e) {
-        console.error(`[API] Ошибка в /cars/${userId}:`, e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
-// Добавление автомобиля
-app.post('/add-car', 
-    authMiddleware,
-    [
-        body('car_name').trim().isLength({ min: 2, max: 50 }).escape(),
-        body('reg_number').optional().trim().isLength({ max: 10 }).escape(),
-        body('mileage').optional().isInt({ min: 0, max: 9999999 })
-    ],
-    async (req, res) => {
-        // Проверка валидации
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
-        }
-        
-        const { user_id, car_name, reg_number, mileage = 0 } = req.body;
-        console.log(`[API] POST /add-car для пользователя ${user_id}:`, { car_name, reg_number, mileage });
-        
-        try {
-            const result = await pool.query(
-                `INSERT INTO cars (user_id, car_name, reg_number, mileage, mileage_last_oil_change, oil_change_interval)
-                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, car_name, reg_number`,
-                [user_id, car_name, reg_number || null, mileage, mileage, 10000]
-            );
-            
-            await logAudit(user_id, 'CREATE_CAR', result.rows[0].id, req);
-            
-            console.log(`[API] Автомобиль добавлен с ID: ${result.rows[0].id}`);
-            res.json(result.rows[0]);
-        } catch (e) {
-            console.error('[API] POST /add-car error:', e.message);
-            res.status(500).json({ error: 'Ошибка при добавлении автомобиля' });
-        }
+// Добавить автомобиль
+app.post('/add-car', validateTelegramId, async (req, res) => {
+    console.log('POST /add-car', req.body);
+    
+    const { user_id, car_name, reg_number, mileage = 0 } = req.body;
+    
+    if (!car_name) {
+        return res.status(400).json({ error: 'Название автомобиля обязательно' });
     }
-);
+    
+    try {
+        const result = await pool.query(
+            `INSERT INTO cars (user_id, car_name, reg_number, mileage, mileage_last_oil_change, oil_change_interval)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [user_id, car_name, reg_number || null, mileage, mileage, 10000]
+        );
+        
+        res.json(result.rows[0]);
+    } catch (e) {
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка при добавлении' });
+    }
+});
 
-// Обновление настроек авто
-app.put('/update-car/:id', authMiddleware, async (req, res) => {
+// Обновить автомобиль
+app.put('/update-car/:id', validateTelegramId, async (req, res) => {
     const { id } = req.params;
     const { car_name, reg_number, mileage, mileage_last_oil_change, oil_change_interval, user_id } = req.body;
 
@@ -273,31 +140,22 @@ app.put('/update-car/:id', authMiddleware, async (req, res) => {
             `UPDATE cars
              SET car_name = $1, reg_number = $2, mileage = $3, mileage_last_oil_change = $4, oil_change_interval = $5
              WHERE id = $6 AND user_id = $7 RETURNING *`,
-            [
-                car_name,
-                reg_number || null,
-                Number(mileage) || 0,
-                Number(mileage_last_oil_change) || 0,
-                Number(oil_change_interval) || 10000,
-                id,
-                user_id
-            ]
+            [car_name, reg_number, mileage, mileage_last_oil_change, oil_change_interval, id, user_id]
         );
 
         if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Авто не найдено' });
         }
 
-        await logAudit(user_id, 'UPDATE_CAR', id, req);
         res.json(result.rows[0]);
     } catch (e) {
-        console.error(`PUT /update-car/${id} error:`, e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка при обновлении' });
     }
 });
 
-// Удаление авто
-app.delete('/cars/:id', authMiddleware, async (req, res) => {
+// Удалить автомобиль
+app.delete('/cars/:id', validateTelegramId, async (req, res) => {
     const { id } = req.params;
     const { user_id } = req.body;
 
@@ -310,16 +168,15 @@ app.delete('/cars/:id', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'Авто не найдено' });
         }
 
-        await logAudit(user_id, 'DELETE_CAR', id, req);
         res.json({ success: true });
     } catch (e) {
-        console.error(`DELETE /cars/${id} error:`, e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка при удалении' });
     }
 });
 
 // Дашборд
-app.get('/dashboard/:carId', authMiddleware, async (req, res) => {
+app.get('/dashboard/:carId', validateTelegramId, async (req, res) => {
     const { carId } = req.params;
     const userId = req.query.user_id;
 
@@ -330,13 +187,6 @@ app.get('/dashboard/:carId', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'Авто не найдено' });
         }
 
-        const lastOil = car.mileage_last_oil_change || 0;
-        const interval = car.oil_change_interval || 10000;
-        const current = car.mileage || 0;
-        const driven = current - lastOil;
-        const remaining = interval - driven;
-        const percent = Math.min(Math.max((driven / interval) * 100, 0), 100);
-
         const fuelRes = await pool.query(
             `SELECT id, 'fuel' AS type, '⛽ Заправка' AS category, amount, liters, price_per_liter, 
                     mileage, full_tank, station_name, comments, date
@@ -345,8 +195,7 @@ app.get('/dashboard/:carId', authMiddleware, async (req, res) => {
         );
 
         const expRes = await pool.query(
-            `SELECT id, 'expense' AS type, category, amount, NULL AS liters, NULL AS price_per_liter, 
-                    mileage, comments, date
+            `SELECT id, 'expense' AS type, category, amount, mileage, comments, date
              FROM car_expenses WHERE car_id = $1`,
             [carId]
         );
@@ -355,30 +204,19 @@ app.get('/dashboard/:carId', authMiddleware, async (req, res) => {
             (a, b) => new Date(b.date) - new Date(a.date)
         );
 
-        res.json({ 
-            car: {
-                ...car,
-                oil_remaining: remaining > 0 ? remaining : 0,
-                oil_percent: percent
-            }, 
-            history 
-        });
+        res.json({ car, history });
     } catch (e) {
-        console.error(`GET /dashboard/${carId} error:`, e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
-// Добавление заправки
-app.post('/add-fuel', authMiddleware, async (req, res) => {
+// Добавить заправку
+app.post('/add-fuel', validateTelegramId, async (req, res) => {
     try {
         const { car_id, amount, liters, mileage, full_tank, station_name, comments, user_id } = req.body;
-        
-        if (!car_id || !amount || !liters || !mileage) {
-            return res.status(400).json({ error: 'Обязательные поля: car_id, amount, liters, mileage' });
-        }
 
-        // Проверяем права доступа к авто
+        // Проверяем, что машина принадлежит пользователю
         const carCheck = await pool.query('SELECT id FROM cars WHERE id = $1 AND user_id = $2', [car_id, user_id]);
         if (carCheck.rowCount === 0) {
             return res.status(403).json({ error: 'Доступ запрещен' });
@@ -389,32 +227,28 @@ app.post('/add-fuel', authMiddleware, async (req, res) => {
         const result = await pool.query(
             `INSERT INTO fuel_records (car_id, amount, liters, price_per_liter, mileage, full_tank, station_name, comments)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            [car_id, amount, liters, ppl, mileage, full_tank ? 1 : 0, station_name || null, comments || null]
+            [car_id, amount, liters, ppl, mileage, full_tank ? 1 : 0, station_name, comments]
         );
 
+        // Обновляем пробег автомобиля
         await pool.query(
             `UPDATE cars SET mileage = GREATEST(mileage, $1) WHERE id = $2`,
             [mileage, car_id]
         );
 
-        await logAudit(user_id, 'ADD_FUEL', result.rows[0].id, req);
         res.json(result.rows[0]);
     } catch (e) {
-        console.error('POST /add-fuel:', e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка при добавлении' });
     }
 });
 
-// Добавление расхода
-app.post('/add-expense', authMiddleware, async (req, res) => {
+// Добавить расход
+app.post('/add-expense', validateTelegramId, async (req, res) => {
     try {
         const { car_id, category, amount, mileage, comments, user_id } = req.body;
-        
-        if (!car_id || !category || !amount) {
-            return res.status(400).json({ error: 'Обязательные поля: car_id, category, amount' });
-        }
 
-        // Проверяем права доступа к авто
+        // Проверяем, что машина принадлежит пользователю
         const carCheck = await pool.query('SELECT id FROM cars WHERE id = $1 AND user_id = $2', [car_id, user_id]);
         if (carCheck.rowCount === 0) {
             return res.status(403).json({ error: 'Доступ запрещен' });
@@ -423,24 +257,23 @@ app.post('/add-expense', authMiddleware, async (req, res) => {
         const result = await pool.query(
             `INSERT INTO car_expenses (car_id, category, amount, mileage, comments)
              VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [car_id, category, amount, mileage || null, comments || null]
+            [car_id, category, amount, mileage, comments]
         );
 
-        await logAudit(user_id, 'ADD_EXPENSE', result.rows[0].id, req);
         res.json(result.rows[0]);
     } catch (e) {
-        console.error('POST /add-expense:', e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка при добавлении' });
     }
 });
 
 // Статистика
-app.get('/stats/:carId/:period', authMiddleware, async (req, res) => {
+app.get('/stats/:carId/:period', validateTelegramId, async (req, res) => {
     try {
         const { carId, period } = req.params;
         const userId = req.query.user_id;
         
-        // Проверяем права доступа к авто
+        // Проверяем, что машина принадлежит пользователю
         const carCheck = await pool.query('SELECT id FROM cars WHERE id = $1 AND user_id = $2', [carId, userId]);
         if (carCheck.rowCount === 0) {
             return res.status(403).json({ error: 'Доступ запрещен' });
@@ -465,18 +298,18 @@ app.get('/stats/:carId/:period', authMiddleware, async (req, res) => {
         const expenses = [...expRes.rows, ...fuelRes.rows].filter(r => r.total);
         res.json({ expenses });
     } catch (e) {
-        console.error('GET /stats:', e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
 // Обновление заправки
-app.put('/fuel-records/:id', authMiddleware, async (req, res) => {
+app.put('/fuel-records/:id', validateTelegramId, async (req, res) => {
     try {
         const { id } = req.params;
         const { amount, liters, mileage, full_tank, station_name, comments, user_id } = req.body;
         
-        // Проверяем права доступа
+        // Проверяем, что запись принадлежит пользователю
         const existing = await pool.query(
             'SELECT fr.*, c.user_id FROM fuel_records fr JOIN cars c ON fr.car_id = c.id WHERE fr.id = $1',
             [id]
@@ -486,34 +319,29 @@ app.put('/fuel-records/:id', authMiddleware, async (req, res) => {
             return res.status(403).json({ error: 'Доступ запрещен' });
         }
 
-        const row = existing.rows[0];
         const ppl = amount / liters;
 
         const result = await pool.query(
             `UPDATE fuel_records SET amount = $1, liters = $2, price_per_liter = $3, 
              mileage = $4, full_tank = $5, station_name = $6, comments = $7
              WHERE id = $8 RETURNING *`,
-            [amount, liters, ppl, mileage, full_tank ? 1 : 0, station_name || null, comments || null, id]
+            [amount, liters, ppl, mileage, full_tank ? 1 : 0, station_name, comments, id]
         );
 
-        await pool.query('UPDATE cars SET mileage = GREATEST(mileage, $1) WHERE id = $2',
-            [mileage, row.car_id]);
-
-        await logAudit(user_id, 'UPDATE_FUEL', id, req);
         res.json(result.rows[0]);
     } catch (e) {
-        console.error('PUT /fuel-records:', e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка при обновлении' });
     }
 });
 
 // Удаление заправки
-app.delete('/fuel-records/:id', authMiddleware, async (req, res) => {
+app.delete('/fuel-records/:id', validateTelegramId, async (req, res) => {
     try {
         const { id } = req.params;
         const { user_id } = req.body;
         
-        // Проверяем права доступа
+        // Проверяем, что запись принадлежит пользователю
         const existing = await pool.query(
             'SELECT fr.*, c.user_id FROM fuel_records fr JOIN cars c ON fr.car_id = c.id WHERE fr.id = $1',
             [id]
@@ -523,22 +351,21 @@ app.delete('/fuel-records/:id', authMiddleware, async (req, res) => {
             return res.status(403).json({ error: 'Доступ запрещен' });
         }
 
-        const result = await pool.query('DELETE FROM fuel_records WHERE id = $1', [id]);
-        await logAudit(user_id, 'DELETE_FUEL', id, req);
+        await pool.query('DELETE FROM fuel_records WHERE id = $1', [id]);
         res.json({ success: true });
     } catch (e) {
-        console.error('DELETE /fuel-records:', e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка при удалении' });
     }
 });
 
 // Обновление расхода
-app.put('/car-expenses/:id', authMiddleware, async (req, res) => {
+app.put('/car-expenses/:id', validateTelegramId, async (req, res) => {
     try {
         const { id } = req.params;
         const { category, amount, mileage, comments, user_id } = req.body;
         
-        // Проверяем права доступа
+        // Проверяем, что запись принадлежит пользователю
         const existing = await pool.query(
             'SELECT ce.*, c.user_id FROM car_expenses ce JOIN cars c ON ce.car_id = c.id WHERE ce.id = $1',
             [id]
@@ -551,24 +378,23 @@ app.put('/car-expenses/:id', authMiddleware, async (req, res) => {
         const result = await pool.query(
             `UPDATE car_expenses SET category = $1, amount = $2, mileage = $3, comments = $4
              WHERE id = $5 RETURNING *`,
-            [category, amount, mileage || null, comments || null, id]
+            [category, amount, mileage, comments, id]
         );
 
-        await logAudit(user_id, 'UPDATE_EXPENSE', id, req);
         res.json(result.rows[0]);
     } catch (e) {
-        console.error('PUT /car-expenses:', e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка при обновлении' });
     }
 });
 
 // Удаление расхода
-app.delete('/car-expenses/:id', authMiddleware, async (req, res) => {
+app.delete('/car-expenses/:id', validateTelegramId, async (req, res) => {
     try {
         const { id } = req.params;
         const { user_id } = req.body;
         
-        // Проверяем права доступа
+        // Проверяем, что запись принадлежит пользователю
         const existing = await pool.query(
             'SELECT ce.*, c.user_id FROM car_expenses ce JOIN cars c ON ce.car_id = c.id WHERE ce.id = $1',
             [id]
@@ -578,27 +404,19 @@ app.delete('/car-expenses/:id', authMiddleware, async (req, res) => {
             return res.status(403).json({ error: 'Доступ запрещен' });
         }
 
-        const result = await pool.query('DELETE FROM car_expenses WHERE id = $1', [id]);
-        await logAudit(user_id, 'DELETE_EXPENSE', id, req);
+        await pool.query('DELETE FROM car_expenses WHERE id = $1', [id]);
         res.json({ success: true });
     } catch (e) {
-        console.error('DELETE /car-expenses:', e.message);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        console.error('Ошибка:', e.message);
+        res.status(500).json({ error: 'Ошибка при удалении' });
     }
 });
 
-// Обработчик ошибок
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+// Проверка здоровья
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok' });
 });
 
-// 404 обработчик
-app.use((req, res) => {
-    res.status(404).json({ error: 'Маршрут не найден' });
-});
-
-// ВАЖНО: Используем порт из переменной окружения Render
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Сервер запущен на порту ${PORT}`);
