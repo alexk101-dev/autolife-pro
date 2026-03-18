@@ -17,7 +17,7 @@ app.use(helmet({
             scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://telegram.org"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "https://autolife-pro.onrender.com"]
+            connectSrc: ["'self'"]
         }
     }
 }));
@@ -25,7 +25,7 @@ app.use(helmet({
 // CORS с ограничениями
 app.use(cors({
     origin: process.env.NODE_ENV === 'production' 
-        ? ['https://autolife-pro.onrender.com', 'https://t.me'] 
+        ? [process.env.RENDER_EXTERNAL_URL || 'https://autolife-pro.onrender.com', 'https://t.me'] 
         : '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data']
@@ -52,9 +52,9 @@ app.use('/add-expense', apiLimiter);
 // Подключение к базе
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' 
-        ? { rejectUnauthorized: false } 
-        : false,
+    ssl: {
+        rejectUnauthorized: false // для Render PostgreSQL
+    },
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
@@ -167,8 +167,12 @@ function verifyTelegramInitData(initData) {
             }
         });
         
-        // Используем токен из переменных окружения или временный для разработки
+        // В продакшене токен должен быть в переменных окружения
         const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (!botToken) {
+            console.log('TELEGRAM_BOT_TOKEN не установлен');
+            return false;
+        }
         
         const secret = crypto.createHmac('sha256', 'WebAppData')
             .update(botToken);
@@ -190,17 +194,15 @@ async function authMiddleware(req, res, next) {
     // Проверяем Telegram данные
     const telegramData = req.headers['x-telegram-init-data'];
     if (telegramData && verifyTelegramInitData(telegramData)) {
-        console.log('Telegram авторизация успешна для:', userId);
         return next();
     }
     
-    // Разрешаем тестовые ID для разработки (только в development режиме)
+    // Разрешаем тестовые ID для разработки (только не в продакшене)
     if (process.env.NODE_ENV !== 'production' && userId && userId.startsWith('test_')) {
         console.log('Тестовый доступ разрешен для:', userId);
         return next();
     }
     
-    console.log('Ошибка авторизации:', { userId, hasTelegramData: !!telegramData });
     return res.status(401).json({ error: 'Требуется авторизация' });
 }
 
@@ -594,7 +596,8 @@ app.use((req, res) => {
     res.status(404).json({ error: 'Маршрут не найден' });
 });
 
+// ВАЖНО: Используем порт из переменной окружения Render
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Сервер запущен на порту ${PORT}`);
 });
