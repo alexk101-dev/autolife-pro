@@ -168,7 +168,7 @@ function verifyTelegramInitData(initData) {
         });
         
         const secret = crypto.createHmac('sha256', 'WebAppData')
-            .update(process.env.TELEGRAM_BOT_TOKEN || '7160549738:AAHglQ-HS2CqJ3eFfzOQ5WwNXVINBUCu3kI');
+            .update(process.env.TELEGRAM_BOT_TOKEN);
         const calculatedHash = crypto.createHmac('sha256', secret.digest())
             .update(dataToCheck.join('\n'))
             .digest('hex');
