@@ -167,8 +167,11 @@ function verifyTelegramInitData(initData) {
             }
         });
         
+        // Используем токен из переменных окружения или временный для разработки
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        
         const secret = crypto.createHmac('sha256', 'WebAppData')
-            .update(process.env.TELEGRAM_BOT_TOKEN);
+            .update(botToken);
         const calculatedHash = crypto.createHmac('sha256', secret.digest())
             .update(dataToCheck.join('\n'))
             .digest('hex');
@@ -182,20 +185,22 @@ function verifyTelegramInitData(initData) {
 
 // Middleware для проверки авторизации
 async function authMiddleware(req, res, next) {
-    const userId = req.params.userId || req.body.user_id;
+    const userId = req.params.userId || req.body.user_id || req.query.user_id;
     
     // Проверяем Telegram данные
     const telegramData = req.headers['x-telegram-init-data'];
     if (telegramData && verifyTelegramInitData(telegramData)) {
+        console.log('Telegram авторизация успешна для:', userId);
         return next();
     }
     
-    // Временно разрешаем тестовые ID для разработки
-    if (userId && userId.startsWith('test_')) {
+    // Разрешаем тестовые ID для разработки (только в development режиме)
+    if (process.env.NODE_ENV !== 'production' && userId && userId.startsWith('test_')) {
         console.log('Тестовый доступ разрешен для:', userId);
         return next();
     }
     
+    console.log('Ошибка авторизации:', { userId, hasTelegramData: !!telegramData });
     return res.status(401).json({ error: 'Требуется авторизация' });
 }
 
