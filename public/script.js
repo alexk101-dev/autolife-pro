@@ -20,6 +20,7 @@ async function fetchWithAuth(url, options = {}) {
     }
     
     try {
+        console.log(`[Fetch] Запрос к ${url}`);
         const response = await fetch(url, {
             ...options,
             headers,
@@ -32,13 +33,19 @@ async function fetchWithAuth(url, options = {}) {
         }
         
         if (response.status === 401) {
+            console.error('[Fetch] Ошибка авторизации');
             showToast('Ошибка авторизации');
+            return null;
+        }
+        
+        if (!response.ok) {
+            console.error(`[Fetch] HTTP ошибка: ${response.status}`);
             return null;
         }
         
         return response;
     } catch (error) {
-        console.error('Network error:', error);
+        console.error('[Fetch] Network error:', error);
         showToast('Ошибка соединения');
         return null;
     }
@@ -59,10 +66,14 @@ function getTelegramUserId() {
                 console.log("[TG] Успех! ID пользователя:", USER_ID);
                 sessionStorage.setItem("autolife_user_id", USER_ID);
                 return true;
+            } else {
+                console.warn("[TG] initDataUnsafe.user не найден");
             }
         } catch (e) {
             console.error("[TG] Ошибка доступа к WebApp:", e);
         }
+    } else {
+        console.log("[TG] Не в Telegram или скрипт не загружен");
     }
     
     // Fallback: проверяем sessionStorage
@@ -139,14 +150,19 @@ async function loadCars() {
         return;
     }
 
+    console.log(`[loadCars] Загрузка автомобилей для USER_ID: ${USER_ID}`);
+
     try {
         const res = await fetchWithAuth(`${API_URL}/cars/${USER_ID}`);
-        if (!res) return;
-        
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+        if (!res) {
+            console.error("[loadCars] Ответ не получен");
+            showToast("Не удалось получить ответ от сервера");
+            return;
         }
+        
         const cars = await res.json();
+        console.log(`[loadCars] Загружено автомобилей:`, cars);
+        
         allCars = cars || [];
         updateCarList(allCars);
 
@@ -299,6 +315,7 @@ async function deleteCar(id) {
 }
 
 async function selectCar(carId) {
+    console.log(`[selectCar] Выбор автомобиля ID: ${carId}`);
     currentCarId = carId;
     updateCarList(allCars);
     await loadDashboard();
@@ -333,6 +350,7 @@ async function loadDashboard() {
         if (!response) return;
         
         const data = await response.json();
+        console.log('[loadDashboard] Данные:', data);
         currentCarData = data;
         updateDashboardUI();
     } catch (error) {
