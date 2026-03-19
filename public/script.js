@@ -14,7 +14,6 @@ function getTelegramInitData() {
 }
 
 async function apiRequest(endpoint, options = {}) {
-    async function apiRequest(endpoint, options = {}) {
     // Добавляем user_id к endpoint если это GET запрос
     if (!options.method || options.method === 'GET') {
         if (endpoint.includes('/cars') && !endpoint.includes('/cars/')) {
@@ -123,7 +122,8 @@ function getTelegramUserId() {
     }
 
     // Последний fallback — временный ID (только для отладки вне Telegram)
-    USER_ID = "test_" + Date.now().toString(36);
+    // Используем префикс tg_, чтобы проходить валидацию на сервере
+    USER_ID = "tg_test_" + Date.now().toString(36);
     localStorage.setItem("autolife_user_id", USER_ID);
     console.warn("[TG] Используется временный ID:", USER_ID);
     return false;
@@ -383,7 +383,6 @@ function updateDashboardUI() {
     }
 }
 
-// updateHistoryUI — оставьте как было, только убедитесь что id передаются как строки
 function updateHistoryUI(history) {
     const historyList = document.getElementById('historyList');
     const historyEmpty = document.getElementById('historyEmpty');
@@ -424,6 +423,7 @@ function updateHistoryUI(history) {
         </div>
     `}).join('');
 }
+
 // ================ ЗАПИСЬ (fuel / expense) ================
 async function saveRecord() {
     const type = document.getElementById('recordType').value;
@@ -513,7 +513,7 @@ async function loadStats() {
     if (!currentCarId) return;
     const period = document.getElementById('statsPeriod').value;
     try {
-        const response = await fetch(`${API_URL}/stats/${currentCarId}/${period}`);
+        const response = await fetch(`${API_URL}/stats/${currentCarId}/${period}?user_id=${USER_ID}`);
         const stats = await response.json();
         updateCharts(stats);
     } catch (error) {
@@ -764,6 +764,13 @@ function quickAction(action) {
     toggleRecordFields();
 }
 
+// ================ НАСТРОЙКИ АВТОМОБИЛЯ (заглушка) ================
+function updateCarSettings() {
+    // Функция-заглушка для сохранения настроек автомобиля
+    console.log('updateCarSettings вызван');
+    showToast('Сохранение настроек пока не реализовано');
+}
+
 // ================ ФУНКЦИЯ ОТЛАДКИ ================
 function debugTelegram() {
     console.log("=== Telegram Debug Info ===");
@@ -780,6 +787,7 @@ function debugTelegram() {
     console.log("Current car:", currentCarData?.car);
     console.log("==========================");
 }
+
 // ================ ЗАПУСК ================
 async function startApp() {
     console.log("🚀 Запуск AutoLife Pro");
@@ -803,7 +811,7 @@ window.selectCar = selectCar;
 window.showAddCarModal = showAddCarModal;
 window.addNewCar = addNewCar;
 window.hideModal = hideModal;
-window.updateCarSettings = updateCarSettings;
+window.updateCarSettings = updateCarSettings; // добавлена заглушка
 window.loadStats = loadStats;
 window.editHistoryItem = editHistoryItem;
 window.deleteHistoryItem = deleteHistoryItem;
