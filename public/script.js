@@ -14,7 +14,19 @@ function getTelegramInitData() {
 }
 
 async function apiRequest(endpoint, options = {}) {
-    const url = `${API_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    async function apiRequest(endpoint, options = {}) {
+    // Добавляем user_id к endpoint если это GET запрос
+    if (!options.method || options.method === 'GET') {
+        if (endpoint.includes('/cars') && !endpoint.includes('/cars/')) {
+            endpoint = `/cars/${USER_ID}`;
+        } else if (endpoint.includes('/dashboard/')) {
+            // dashboard уже содержит carId, оставляем как есть
+        } else if (endpoint.includes('/stats/')) {
+            // stats уже содержит carId/period, оставляем как есть
+        }
+    }
+
+    const url = `${API_URL}${endpoint}`;
     
     const headers = {
         'Content-Type': 'application/json',
@@ -22,10 +34,16 @@ async function apiRequest(endpoint, options = {}) {
         ...options.headers
     };
 
+    // Добавляем user_id в body для POST/PUT запросов
+    let body = options.body;
+    if (body && typeof body === 'object') {
+        body = { ...body, user_id: USER_ID };
+    }
+
     const fetchOptions = {
         ...options,
         headers,
-        body: options.body ? JSON.stringify(options.body) : undefined
+        body: body ? JSON.stringify(body) : undefined
     };
 
     const loader = document.getElementById('globalLoader');
@@ -161,7 +179,8 @@ function escapeHtml(unsafe) {
 // ================ АВТОМОБИЛИ ================
 async function loadCars() {
     try {
-        const cars = await apiRequest('/cars');
+        // Используем правильный эндпоинт с USER_ID
+        const cars = await apiRequest(`/cars/${USER_ID}`);
         allCars = cars || [];
         updateCarList(allCars);
 
@@ -171,7 +190,9 @@ async function loadCars() {
             document.getElementById('historyList').innerHTML = '';
             document.getElementById('historyEmpty').classList.remove('hidden');
         }
-    } catch {}
+    } catch (error) {
+        console.error('Ошибка загрузки авто:', error);
+    }
 }
 
 function updateCarList(cars) {
@@ -216,16 +237,24 @@ async function addNewCar() {
     }
 
     try {
+        // user_id добавится автоматически в apiRequest
         await apiRequest('/add-car', {
             method: 'POST',
-            body: { car_name: name, reg_number: reg, mileage }
+            body: { 
+                car_name: name, 
+                reg_number: reg, 
+                mileage 
+                // user_id добавится в apiRequest
+            }
         });
 
         hideModal('addCarModal');
         showToast('Авто успешно добавлено');
         await loadCars();
         hideModal('carsModal');
-    } catch {}
+    } catch (error) {
+        console.error('Ошибка добавления:', error);
+    }
 }
 
 function openCarsModal() {
