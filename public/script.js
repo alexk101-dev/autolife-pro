@@ -7,45 +7,87 @@ let allCars = [];
 let charts = { category: null, price: null };
 let editingRecord = null;
 
+// ================ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ API ================
+
+function getTelegramInitData() {
+    return window.Telegram?.WebApp?.initData || '';
+}
+
+async function apiRequest(endpoint, options = {}) {
+    const url = `${API_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        'Telegram-Data': getTelegramInitData(),
+        ...options.headers
+    };
+
+    const fetchOptions = {
+        ...options,
+        headers,
+        body: options.body ? JSON.stringify(options.body) : undefined
+    };
+
+    const loader = document.getElementById('globalLoader');
+    if (loader) loader.classList.remove('hidden');
+
+    try {
+        const response = await fetch(url, fetchOptions);
+        
+        if (!response.ok) {
+            let errorData;
+            try {
+                errorData = await response.json();
+            } catch {
+                errorData = { error: `HTTP ${response.status}` };
+            }
+            const message = errorData.error || `Ошибка ${response.status}`;
+            throw new Error(message);
+        }
+
+        return await response.json();
+    } catch (err) {
+        console.error(`API [${endpoint}]:`, err.message);
+        showToast(err.message || 'Ошибка связи с сервером');
+        throw err;
+    } finally {
+        if (loader) loader.classList.add('hidden');
+    }
+}
+
 // ================ АВТОРИЗАЦИЯ ================
 function getTelegramUserId() {
-    console.log("[TG] Начало получения user ID");
-    
-    // Способ 1: Прямой доступ к Telegram WebApp
+    console.log("[TG] Попытка получения user ID");
+
+    // Способ 1 — Telegram WebApp
     if (window.Telegram?.WebApp) {
         try {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
-            
-            // Получаем данные пользователя
+
             const user = window.Telegram.WebApp.initDataUnsafe?.user;
             if (user?.id) {
                 USER_ID = "tg_" + user.id;
-                console.log("[TG] Успех! ID пользователя:", USER_ID, user.first_name);
+                console.log("[TG] Успех через WebApp:", USER_ID, user.first_name);
                 localStorage.setItem("autolife_user_id", USER_ID);
                 return true;
-            } else {
-                console.warn("[TG] initDataUnsafe.user не найден");
             }
         } catch (e) {
-            console.error("[TG] Ошибка доступа к WebApp:", e);
+            console.error("[TG] Ошибка WebApp:", e);
         }
-    } else {
-        console.log("[TG] Не в Telegram или скрипт не загружен");
     }
-    
-    // Способ 2: Парсинг из URL
+
+    // Способ 2 — из URL (fallback)
     try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const tgWebAppData = urlParams.get('tgWebAppData');
-        if (tgWebAppData) {
-            const tgParams = new URLSearchParams(tgWebAppData);
-            const userStr = tgParams.get('user');
+        const params = new URLSearchParams(window.location.search);
+        const tgData = params.get('tgWebAppData');
+        if (tgData) {
+            const userStr = new URLSearchParams(tgData).get('user');
             if (userStr) {
                 const user = JSON.parse(decodeURIComponent(userStr));
                 if (user?.id) {
                     USER_ID = "tg_" + user.id;
-                    console.log("[TG] Из URL:", USER_ID);
+                    console.log("[TG] Успех из URL:", USER_ID);
                     localStorage.setItem("autolife_user_id", USER_ID);
                     return true;
                 }
@@ -54,18 +96,18 @@ function getTelegramUserId() {
     } catch (e) {
         console.error("[TG] Ошибка парсинга URL:", e);
     }
-    
-    // Fallback: проверяем localStorage
+
+    // Способ 3 — из localStorage
     USER_ID = localStorage.getItem("autolife_user_id");
     if (USER_ID && USER_ID.startsWith('tg_')) {
-        console.log("[TG] Восстановлен из localStorage:", USER_ID);
+        console.log("[TG] Восстановлено из localStorage:", USER_ID);
         return true;
     }
-    
-    // Генерируем временный ID для тестирования
+
+    // Последний fallback — временный ID (только для отладки вне Telegram)
     USER_ID = "test_" + Date.now().toString(36);
     localStorage.setItem("autolife_user_id", USER_ID);
-    console.log("[TG] Временный тестовый ID:", USER_ID);
+    console.warn("[TG] Используется временный ID:", USER_ID);
     return false;
 }
 
@@ -73,19 +115,18 @@ function getTelegramUserId() {
 function applyUserTheme() {
     const select = document.getElementById('themeSelect');
     if (!select) return;
-    
+
     const saved = localStorage.getItem('user_theme_choice') || 'system';
     select.value = saved;
-    
+
     let effective = saved;
     if (saved === 'system') {
         effective = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
-    
+
     document.documentElement.setAttribute('data-theme', effective);
 }
 
-// Слушаем изменение системной темы
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyUserTheme);
 
 // ================ УВЕДОМЛЕНИЯ ================
@@ -94,7 +135,7 @@ function showToast(message) {
     toast.className = 'toast';
     toast.textContent = message;
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2000);
+    setTimeout(() => toast.remove(), 2800);
 }
 
 // ================ МОДАЛЬНЫЕ ОКНА ================
@@ -119,21 +160,8 @@ function escapeHtml(unsafe) {
 
 // ================ АВТОМОБИЛИ ================
 async function loadCars() {
-    if (!USER_ID) {
-        console.error("[loadCars] USER_ID не установлен!");
-        showToast("Ошибка: пользователь не идентифицирован");
-        return;
-    }
-
-    console.log("[loadCars] Запрос автомобилей для:", USER_ID);
-
     try {
-        const res = await fetch(`${API_URL}/cars/${USER_ID}`);
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-        }
-        const cars = await res.json();
-        console.log(`[loadCars] Загружено ${cars.length} автомобилей`);
+        const cars = await apiRequest('/cars');
         allCars = cars || [];
         updateCarList(allCars);
 
@@ -143,10 +171,7 @@ async function loadCars() {
             document.getElementById('historyList').innerHTML = '';
             document.getElementById('historyEmpty').classList.remove('hidden');
         }
-    } catch (err) {
-        console.error("[loadCars] Ошибка:", err);
-        showToast("Не удалось загрузить список автомобилей");
-    }
+    } catch {}
 }
 
 function updateCarList(cars) {
@@ -164,7 +189,7 @@ function updateCarList(cars) {
 
     carList.innerHTML = cars.map(car => `
         <div class="car-chip ${car.id === currentCarId ? 'active' : ''}"
-             onclick="selectCar(${car.id})">
+             onclick="selectCar('${car.id}')">
             <div class="car-chip-title">${escapeHtml(car.car_name)}</div>
             <div class="car-chip-sub">
                 ${escapeHtml(car.reg_number || '—')} · ${(Number(car.mileage) || 0).toLocaleString('ru-RU')} км
@@ -190,36 +215,17 @@ async function addNewCar() {
         return;
     }
 
-    console.log("[addNewCar] Добавление авто:", { name, reg, mileage, USER_ID });
-
     try {
-        const response = await fetch(`${API_URL}/add-car`, {
+        await apiRequest('/add-car', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: USER_ID,
-                car_name: name,
-                reg_number: reg,
-                mileage: mileage,
-                mileage_last_oil_change: mileage,
-                oil_change_interval: 10000
-            })
+            body: { car_name: name, reg_number: reg, mileage }
         });
 
-        if (response.ok) {
-            hideModal('addCarModal');
-            showToast('Авто успешно добавлено');
-            await loadCars();
-            hideModal('carsModal');
-        } else {
-            const err = await response.json();
-            console.error('Ошибка сервера:', err);
-            showToast(err.error || 'Ошибка добавления');
-        }
-    } catch (error) {
-        console.error('Ошибка сети:', error);
-        showToast('Ошибка сети при добавлении');
-    }
+        hideModal('addCarModal');
+        showToast('Авто успешно добавлено');
+        await loadCars();
+        hideModal('carsModal');
+    } catch {}
 }
 
 function openCarsModal() {
@@ -236,17 +242,17 @@ function openCarsModal() {
     } else {
         listEl.innerHTML = allCars.map(car => `
             <div class="cars-modal-item ${car.id === currentCarId ? 'active' : ''}">
-                <div class="cars-modal-main" onclick="handleSelectCarFromModal(${car.id})">
+                <div class="cars-modal-main" onclick="handleSelectCarFromModal('${car.id}')">
                     <div class="cars-modal-title">${escapeHtml(car.car_name)}</div>
                     <div class="cars-modal-sub">
                         ${escapeHtml(car.reg_number || '—')} · ${(Number(car.mileage) || 0).toLocaleString('ru-RU')} км
                     </div>
                 </div>
                 <div style="display:flex; gap:4px;">
-                    <button class="icon-btn" onclick="handleSelectCarFromModal(${car.id}); event.stopPropagation();">
+                    <button class="icon-btn" onclick="handleSelectCarFromModal('${car.id}'); event.stopPropagation();">
                         <span class="material-symbols-outlined" style="font-size:18px;">directions_car</span>
                     </button>
-                    <button class="icon-btn" style="background:rgba(239,68,68,0.08); color:#b91c1c;" onclick="deleteCar(${car.id}); event.stopPropagation();">
+                    <button class="icon-btn" style="background:rgba(239,68,68,0.08); color:#b91c1c;" onclick="deleteCar('${car.id}'); event.stopPropagation();">
                         <span class="material-symbols-outlined" style="font-size:18px;">delete</span>
                     </button>
                 </div>
@@ -264,34 +270,21 @@ function handleSelectCarFromModal(id) {
 async function deleteCar(id) {
     if (!confirm('Удалить автомобиль и все его записи?')) return;
     try {
-        const res = await fetch(`${API_URL}/cars/${id}`, { method: 'DELETE' });
-        if (!res.ok) {
-            let msg = 'Не удалось удалить авто';
-            try {
-                const data = await res.json();
-                if (data && data.error) msg = data.error;
-            } catch (_) {}
-            showToast(msg);
-            return;
-        }
+        await apiRequest(`/cars/${id}`, { method: 'DELETE' });
+        showToast('Авто удалён');
         await loadCars();
-        hideModal('carsModal');
-        
+
         if (!allCars.some(c => c.id === currentCarId) && allCars.length > 0) {
             await selectCar(allCars[0].id);
         } else if (allCars.length === 0) {
             currentCarId = null;
             currentCarData = null;
         }
-        showToast('Авто удалён');
-    } catch (e) {
-        console.error('Ошибка удаления авто:', e);
-        showToast('Ошибка удаления авто');
-    }
+    } catch {}
 }
 
 async function selectCar(carId) {
-    console.log("[selectCar] Выбор авто:", carId);
+    console.log("[selectCar] Выбор:", carId);
     currentCarId = carId;
     updateCarList(allCars);
     await loadDashboard();
@@ -308,28 +301,22 @@ function calculateFuelConsumption(history) {
     
     if (fuels.length < 2) return '0.0';
     
-    const lastFuel = fuels[0];
-    const prevFuel = fuels[1];
+    const last = fuels[0];
+    const prev = fuels[1];
     
-    const distance = lastFuel.mileage - prevFuel.mileage;
-    
+    const distance = last.mileage - prev.mileage;
     if (distance <= 0) return '0.0';
     
-    const consumption = (lastFuel.liters / distance) * 100;
-    return consumption.toFixed(1);
+    return ((last.liters / distance) * 100).toFixed(1);
 }
 
 async function loadDashboard() {
     if (!currentCarId) return;
     try {
-        const response = await fetch(`${API_URL}/dashboard/${currentCarId}`);
-        const data = await response.json();
-        console.log('[loadDashboard] Данные:', data);
+        const data = await apiRequest(`/dashboard/${currentCarId}`);
         currentCarData = data;
         updateDashboardUI();
-    } catch (error) {
-        console.error('Ошибка загрузки дашборда:', error);
-    }
+    } catch {}
 }
 
 function updateDashboardUI() {
@@ -337,10 +324,11 @@ function updateDashboardUI() {
     
     const data = currentCarData;
     
-    const consumption = calculateFuelConsumption(data.history);
-    document.getElementById('consumption').innerHTML = `${consumption}<span class="stat-unit">л/100км</span>`;
+    document.getElementById('consumption').innerHTML = 
+        `${calculateFuelConsumption(data.history)}<span class="stat-unit">л/100км</span>`;
     
-    document.getElementById('mileage').innerHTML = `${(data.car?.mileage || 0).toLocaleString()}<span class="stat-unit">км</span>`;
+    document.getElementById('mileage').innerHTML = 
+        `${(data.car?.mileage || 0).toLocaleString()}<span class="stat-unit">км</span>`;
     
     const fuelCount = data.history?.filter(h => h.type === 'fuel').length || 0;
     document.getElementById('fuelCount').innerHTML = fuelCount;
@@ -361,9 +349,12 @@ function updateDashboardUI() {
         document.getElementById('settingsReg').value = data.car.reg_number || '';
         document.getElementById('settingsMileage').value = data.car.mileage || 0;
         document.getElementById('settingsOilInterval').value = data.car.oil_change_interval || 10000;
+        // Если добавите поле last oil change:
+        // document.getElementById('settingsLastOilChange').value = data.car.mileage_last_oil_change || data.car.mileage || 0;
     }
 }
 
+// updateHistoryUI — оставьте как было, только убедитесь что id передаются как строки
 function updateHistoryUI(history) {
     const historyList = document.getElementById('historyList');
     const historyEmpty = document.getElementById('historyEmpty');
@@ -404,145 +395,88 @@ function updateHistoryUI(history) {
         </div>
     `}).join('');
 }
-
-// ================ СОХРАНЕНИЕ ================
+// ================ ЗАПИСЬ (fuel / expense) ================
 async function saveRecord() {
     const type = document.getElementById('recordType').value;
-    const amount = parseFloat(document.getElementById('amount').value);
-    const comment = document.getElementById('comment').value;
-    
-    if (editingRecord && type !== editingRecord.type) {
-        showToast('Нельзя менять тип записи');
+    const amount = parseFloat(document.getElementById('amount').value) || 0;
+    const comment = document.getElementById('comment').value.trim();
+
+    if (amount <= 0) {
+        showToast('Введите сумму больше 0');
         return;
     }
-    
-    if (!amount || amount <= 0) {
-        showToast('Введите сумму');
-        return;
-    }
-    
-    const payload = {
-        car_id: currentCarId,
-        amount: amount,
-        comments: comment
-    };
-    
-    try {
-        if (type === 'fuel') {
-            const liters = parseFloat(document.getElementById('liters').value);
-            const mileage = parseInt(document.getElementById('fuelMileage').value);
-            
-            if (!liters || !mileage) {
-                showToast('Заполните литры и пробег');
-                return;
-            }
-            
-            if (currentCarData?.car?.mileage && mileage <= currentCarData.car.mileage) {
-                showToast('Пробег должен быть больше текущего');
-                return;
-            }
-            
-            payload.liters = liters;
-            payload.mileage = mileage;
-            payload.price_per_liter = amount / liters;
-            payload.full_tank = document.getElementById('fullTank').checked;
-            payload.station_name = document.getElementById('station').value;
-            
-            const url = editingRecord && editingRecord.type === 'fuel'
-                ? `${API_URL}/fuel-records/${editingRecord.id}`
-                : `${API_URL}/add-fuel`;
-            const method = editingRecord && editingRecord.type === 'fuel' ? 'PUT' : 'POST';
-            
-            const response = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            
-            if (response.ok) {
-                showToast(editingRecord ? '⛽ Заправка изменена' : '⛽ Заправка добавлена');
-                await loadDashboard();
-                clearForm();
-                editingRecord = null;
-                resetSaveButtonText();
-                switchTab('home', document.querySelector('.nav-btn'));
-            }
-        } else {
-            payload.category = document.getElementById('category').value;
-            const serviceMileage = parseInt(document.getElementById('serviceMileage').value);
-            if (payload.category === '⚙️ ТО' && serviceMileage) {
-                payload.mileage = serviceMileage;
-            }
-            
-            const url = editingRecord && editingRecord.type === 'expense'
-                ? `${API_URL}/car-expenses/${editingRecord.id}`
-                : `${API_URL}/add-expense`;
-            const method = editingRecord && editingRecord.type === 'expense' ? 'PUT' : 'POST';
-            
-            const response = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            
-            if (response.ok) {
-                showToast(editingRecord ? '📦 Запись изменена' : '📦 Расход добавлен');
-                await loadDashboard();
-                clearForm();
-                editingRecord = null;
-                resetSaveButtonText();
-                switchTab('home', document.querySelector('.nav-btn'));
-            }
+
+    let payload = { amount, comments: comment };
+
+    if (type === 'fuel') {
+        const liters = parseFloat(document.getElementById('liters').value) || 0;
+        const mileage = parseInt(document.getElementById('fuelMileage').value) || 0;
+        const station = document.getElementById('station').value.trim();
+        const fullTank = document.getElementById('fullTank').checked;
+
+        if (liters <= 0 || mileage <= 0) {
+            showToast('Укажите литры и пробег');
+            return;
         }
-    } catch (error) {
-        console.error('Ошибка сохранения:', error);
-        showToast('Ошибка при сохранении');
+
+        payload = {
+            ...payload,
+            liters,
+            mileage,
+            full_tank: fullTank,
+            station_name: station
+        };
+
+        const endpoint = editingRecord?.type === 'fuel' 
+            ? `/fuel-records/${editingRecord.id}`
+            : '/add-fuel';
+
+        try {
+            await apiRequest(endpoint, {
+                method: editingRecord ? 'PUT' : 'POST',
+                body: { car_id: currentCarId, ...payload }
+            });
+            showToast(editingRecord ? 'Заправка изменена' : 'Заправка добавлена');
+        } catch { return; }
+    } else {
+        const category = document.getElementById('category').value;
+        const serviceMileage = parseInt(document.getElementById('serviceMileage').value) || null;
+
+        payload = {
+            ...payload,
+            category,
+            mileage: category === '⚙️ ТО' ? serviceMileage : null
+        };
+
+        const endpoint = editingRecord?.type === 'expense' 
+            ? `/car-expenses/${editingRecord.id}`
+            : '/add-expense';
+
+        try {
+            await apiRequest(endpoint, {
+                method: editingRecord ? 'PUT' : 'POST',
+                body: { car_id: currentCarId, ...payload }
+            });
+            showToast(editingRecord ? 'Расход изменён' : 'Расход добавлен');
+        } catch { return; }
     }
+
+    hideModal('addTab'); // если есть модалка
+    clearForm();
+    editingRecord = null;
+    resetSaveButtonText();
+    switchTab('home', document.querySelector('.nav-btn.active'));
+    await loadDashboard();
 }
 
 function clearForm() {
-    document.getElementById('amount').value = '';
-    document.getElementById('comment').value = '';
-    document.getElementById('liters').value = '';
-    document.getElementById('fuelMileage').value = '';
-    document.getElementById('station').value = '';
+    ['amount', 'liters', 'fuelMileage', 'station', 'comment', 'serviceMileage'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
     document.getElementById('fullTank').checked = false;
-    document.getElementById('serviceMileage').value = '';
     editingRecord = null;
     resetSaveButtonText();
-}
-
-// ================ НАСТРОЙКИ ================
-async function updateCarSettings() {
-    const name = document.getElementById('settingsName').value.trim();
-    const reg = document.getElementById('settingsReg').value.trim();
-    const mileage = parseInt(document.getElementById('settingsMileage').value);
-    const oilInterval = parseInt(document.getElementById('settingsOilInterval').value);
-    
-    if (!name) {
-        showToast('Введите название');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_URL}/update-car/${currentCarId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                car_name: name,
-                reg_number: reg,
-                mileage: mileage,
-                oil_change_interval: oilInterval
-            })
-        });
-        
-        if (response.ok) {
-            showToast('Настройки сохранены');
-            await loadDashboard();
-        }
-    } catch (error) {
-        showToast('Ошибка при сохранении');
-    }
 }
 
 // ================ СТАТИСТИКА ================
@@ -817,28 +751,21 @@ function debugTelegram() {
     console.log("Current car:", currentCarData?.car);
     console.log("==========================");
 }
-
 // ================ ЗАПУСК ================
 async function startApp() {
-    console.log("🚀 Запуск приложения...");
-    
-    // Получаем Telegram ID
+    console.log("🚀 Запуск AutoLife Pro");
+
     getTelegramUserId();
-    
-    // Применяем тему
     applyUserTheme();
-    
-    // Загружаем автомобили
     await loadCars();
-    
-    // Настраиваем поля формы
+
     toggleRecordFields();
     updateServiceFieldsVisibility();
-    
-    console.log("✅ Приложение готово. USER_ID =", USER_ID);
+
+    console.log("✅ Готово. USER_ID =", USER_ID);
 }
 
-// Глобальные функции
+// Глобальные функции для onclick
 window.switchTab = switchTab;
 window.toggleRecordFields = toggleRecordFields;
 window.saveRecord = saveRecord;
@@ -856,7 +783,5 @@ window.openCarsModal = openCarsModal;
 window.handleSelectCarFromModal = handleSelectCarFromModal;
 window.deleteCar = deleteCar;
 window.applyUserTheme = applyUserTheme;
-window.debugTelegram = debugTelegram;
 
-// Запуск при загрузке страницы
 window.addEventListener('load', startApp);
