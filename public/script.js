@@ -14,14 +14,17 @@ function getTelegramInitData() {
 }
 
 async function apiRequest(endpoint, options = {}) {
-    // Добавляем user_id к endpoint если это GET запрос
+    // Добавляем user_id к endpoint если это GET запрос и endpoint подходящий
     if (!options.method || options.method === 'GET') {
-        if (endpoint.includes('/cars') && !endpoint.includes('/cars/')) {
+        // Для запросов списка авто подставляем userId
+        if (endpoint === '/cars' || endpoint === '/cars/') {
             endpoint = `/cars/${USER_ID}`;
-        } else if (endpoint.includes('/dashboard/')) {
-            // dashboard уже содержит carId, оставляем как есть
-        } else if (endpoint.includes('/stats/')) {
-            // stats уже содержит carId/period, оставляем как есть
+        }
+        // Для остальных GET-запросов, если в endpoint нет :userId, добавляем user_id query-параметром
+        else if (!endpoint.includes('/cars/') && !endpoint.includes('/dashboard/') && !endpoint.includes('/stats/')) {
+            // Добавляем query параметр, если его ещё нет
+            const separator = endpoint.includes('?') ? '&' : '?';
+            endpoint = `${endpoint}${separator}user_id=${USER_ID}`;
         }
     }
 
@@ -33,7 +36,7 @@ async function apiRequest(endpoint, options = {}) {
         ...options.headers
     };
 
-    // Добавляем user_id в body для POST/PUT запросов
+    // Добавляем user_id в body для POST/PUT/DELETE запросов
     let body = options.body;
     if (body && typeof body === 'object') {
         body = { ...body, user_id: USER_ID };
@@ -49,6 +52,7 @@ async function apiRequest(endpoint, options = {}) {
     if (loader) loader.classList.remove('hidden');
 
     try {
+        console.log(`📡 API Request: ${options.method || 'GET'} ${url}`, body);
         const response = await fetch(url, fetchOptions);
         
         if (!response.ok) {
@@ -62,9 +66,11 @@ async function apiRequest(endpoint, options = {}) {
             throw new Error(message);
         }
 
-        return await response.json();
+        const data = await response.json();
+        console.log(`✅ API Response: ${endpoint}`, data);
+        return data;
     } catch (err) {
-        console.error(`API [${endpoint}]:`, err.message);
+        console.error(`❌ API [${endpoint}]:`, err.message);
         showToast(err.message || 'Ошибка связи с сервером');
         throw err;
     } finally {
@@ -122,7 +128,6 @@ function getTelegramUserId() {
     }
 
     // Последний fallback — временный ID (только для отладки вне Telegram)
-    // Используем префикс tg_, чтобы проходить валидацию на сервере
     USER_ID = "tg_test_" + Date.now().toString(36);
     localStorage.setItem("autolife_user_id", USER_ID);
     console.warn("[TG] Используется временный ID:", USER_ID);
@@ -178,9 +183,12 @@ function escapeHtml(unsafe) {
 
 // ================ АВТОМОБИЛИ ================
 async function loadCars() {
+    if (!USER_ID) {
+        console.error('USER_ID не определён');
+        return;
+    }
     try {
-        // Используем правильный эндпоинт с USER_ID
-        const cars = await apiRequest(`/cars/${USER_ID}`);
+        const cars = await apiRequest('/cars'); // теперь apiRequest сам подставит /cars/USER_ID
         allCars = cars || [];
         updateCarList(allCars);
 
@@ -237,14 +245,12 @@ async function addNewCar() {
     }
 
     try {
-        // user_id добавится автоматически в apiRequest
         await apiRequest('/add-car', {
             method: 'POST',
             body: { 
                 car_name: name, 
                 reg_number: reg, 
                 mileage 
-                // user_id добавится в apiRequest
             }
         });
 
@@ -299,7 +305,10 @@ function handleSelectCarFromModal(id) {
 async function deleteCar(id) {
     if (!confirm('Удалить автомобиль и все его записи?')) return;
     try {
-        await apiRequest(`/cars/${id}`, { method: 'DELETE' });
+        await apiRequest(`/cars/${id}`, { 
+            method: 'DELETE',
+            body: {} // тело нужно, чтобы apiRequest добавил user_id
+        });
         showToast('Авто удалён');
         await loadCars();
 
@@ -309,7 +318,9 @@ async function deleteCar(id) {
             currentCarId = null;
             currentCarData = null;
         }
-    } catch {}
+    } catch (error) {
+        console.error('Ошибка удаления:', error);
+    }
 }
 
 async function selectCar(carId) {
@@ -345,7 +356,9 @@ async function loadDashboard() {
         const data = await apiRequest(`/dashboard/${currentCarId}`);
         currentCarData = data;
         updateDashboardUI();
-    } catch {}
+    } catch (error) {
+        console.error('Ошибка загрузки дашборда:', error);
+    }
 }
 
 function updateDashboardUI() {
@@ -378,8 +391,6 @@ function updateDashboardUI() {
         document.getElementById('settingsReg').value = data.car.reg_number || '';
         document.getElementById('settingsMileage').value = data.car.mileage || 0;
         document.getElementById('settingsOilInterval').value = data.car.oil_change_interval || 10000;
-        // Если добавите поле last oil change:
-        // document.getElementById('settingsLastOilChange').value = data.car.mileage_last_oil_change || data.car.mileage || 0;
     }
 }
 
@@ -490,7 +501,7 @@ async function saveRecord() {
         } catch { return; }
     }
 
-    hideModal('addTab'); // если есть модалка
+    hideModal('addTab');
     clearForm();
     editingRecord = null;
     resetSaveButtonText();
@@ -513,8 +524,8 @@ async function loadStats() {
     if (!currentCarId) return;
     const period = document.getElementById('statsPeriod').value;
     try {
-        const response = await fetch(`${API_URL}/stats/${currentCarId}/${period}?user_id=${USER_ID}`);
-        const stats = await response.json();
+        // Используем apiRequest, который сам добавит user_id
+        const stats = await apiRequest(`/stats/${currentCarId}/${period}`);
         updateCharts(stats);
     } catch (error) {
         console.error('Ошибка статистики:', error);
@@ -719,18 +730,12 @@ function editHistoryItem(type, id) {
 async function deleteHistoryItem(type, id) {
     if (!confirm('Удалить запись?')) return;
     try {
-        const endpoint = type === 'fuel'
-            ? `/fuel-records/${id}`
-            : `/car-expenses/${id}`;
-        const response = await fetch(`${API_URL}${endpoint}`, {
-            method: 'DELETE'
+        await apiRequest(type === 'fuel' ? `/fuel-records/${id}` : `/car-expenses/${id}`, {
+            method: 'DELETE',
+            body: {} // нужно для добавления user_id
         });
-        if (response.ok) {
-            showToast('Запись удалена');
-            await loadDashboard();
-        } else {
-            showToast('Не удалось удалить запись');
-        }
+        showToast('Запись удалена');
+        await loadDashboard();
     } catch (error) {
         console.error('Ошибка удаления:', error);
         showToast('Ошибка удаления');
@@ -766,7 +771,6 @@ function quickAction(action) {
 
 // ================ НАСТРОЙКИ АВТОМОБИЛЯ (заглушка) ================
 function updateCarSettings() {
-    // Функция-заглушка для сохранения настроек автомобиля
     console.log('updateCarSettings вызван');
     showToast('Сохранение настроек пока не реализовано');
 }
@@ -794,12 +798,19 @@ async function startApp() {
 
     getTelegramUserId();
     applyUserTheme();
-    await loadCars();
-
-    toggleRecordFields();
-    updateServiceFieldsVisibility();
-
-    console.log("✅ Готово. USER_ID =", USER_ID);
+    
+    // Небольшая задержка для уверенности, что всё инициализировалось
+    setTimeout(async () => {
+        if (USER_ID) {
+            await loadCars();
+            toggleRecordFields();
+            updateServiceFieldsVisibility();
+            console.log("✅ Готово. USER_ID =", USER_ID);
+        } else {
+            console.error("❌ USER_ID не получен");
+            showToast("Ошибка авторизации");
+        }
+    }, 100);
 }
 
 // Глобальные функции для onclick
@@ -811,7 +822,7 @@ window.selectCar = selectCar;
 window.showAddCarModal = showAddCarModal;
 window.addNewCar = addNewCar;
 window.hideModal = hideModal;
-window.updateCarSettings = updateCarSettings; // добавлена заглушка
+window.updateCarSettings = updateCarSettings;
 window.loadStats = loadStats;
 window.editHistoryItem = editHistoryItem;
 window.deleteHistoryItem = deleteHistoryItem;
